@@ -1,0 +1,55 @@
+# Prod environment - placeholder (update with actual values)
+
+aws_profile = "pdi-platform-prod"
+aws_region  = "us-east-1"
+environment = "prod"
+
+# Networking - update with prod VPC
+vpc_id = "" # TODO: prod VPC ID
+
+private_subnet_ids = [
+  "", # TODO: prod private subnet 1a
+  "", # TODO: prod private subnet 1b
+]
+
+public_subnet_ids = [
+  "", # TODO: prod public subnet 1a
+  "", # TODO: prod public subnet 1b
+]
+
+# EKS
+eks_cluster_version = "1.32"
+node_instance_type  = "t3.medium"
+node_min_size       = 2
+node_max_size       = 5
+node_desired_size   = 2
+
+# DNS & TLS - update with prod zone
+route53_zone_id     = "" # TODO: prod Route53 zone ID
+route53_zone_name   = "" # TODO: prod zone name (e.g., platform.pditechnologies.com)
+acm_certificate_arn = "" # TODO: prod ACM wildcard cert ARN
+hostname            = "" # TODO: e.g., holmesgpt.platform.pditechnologies.com
+
+# LLM
+anthropic_api_base = "https://ai-gateway.platform.pditechnologies.com"
+anthropic_api_key  = "" # Set via TF_VAR_anthropic_api_key or -var flag
+holmes_model       = "anthropic/claude-sonnet-4-5-20250929"
+
+# Holmes
+holmes_replicas  = 2
+holmes_image_tag = "latest"
+
+# UI Auth
+holmes_ui_username = "admin"
+holmes_ui_password = "" # Set via TF_VAR_holmes_ui_password or -var flag
+
+# MCP Integration API Keys
+mcp_ado_api_key       = "" # Set via TF_VAR_mcp_ado_api_key or -var flag
+mcp_atlassian_api_key = "" # Set via TF_VAR_mcp_atlassian_api_key or -var flag
+
+# Tags
+tags = {
+  Team        = "platform"
+  CostCenter  = "engineering"
+  Application = "holmesgpt"
+}

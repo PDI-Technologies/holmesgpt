@@ -8,18 +8,18 @@ HolmesGPT is an AI-powered troubleshooting agent that connects to observability 
 
 ## Development Commands
 
+### Prerequisites
+- Python 3.11 to 3.13 (3.14+ not supported due to prometrix dependency; workaround: `export DISABLE_PROMETHEUS_TOOLSET=true`)
+- Poetry 1.8.4+
+- Pre-commit hooks require Python 3.11 specifically (even if project uses a different version)
+
 ### Environment Setup
 ```bash
-# Install dependencies with Poetry
-poetry install
+# Install dependencies with Poetry (including dev tools)
+poetry install --with dev
 ```
 
 ### Testing
-
-```bash
-# Install test dependencies with Poetry
-poetry install --with dev
-```
 
 ```bash
 # Run all non-LLM tests (unit and integration tests)
@@ -156,6 +156,25 @@ See `prometheus/prometheus.py` PrometheusConfig for a complete example.
 5. LLM analyzes results and provides conclusions
 6. Optionally write results back to source system
 
+**MCP Toolsets** (`holmes/plugins/toolsets/mcp/`):
+- Supports Model Context Protocol servers as toolsets (stdio, SSE, HTTP transports)
+- MCP servers are configured in `~/.holmes/config.yaml` under `custom_toolsets`
+- Each MCP server exposes its tools as Holmes tools automatically
+
+**Fast Model / Output Summarization**:
+- Configure `fast_model` (e.g., `gpt-4o-mini`) in config for cost-effective summarization of large tool outputs
+- Tool output transformers (`holmes/core/transformers/`) can use the fast model to compress outputs before sending to the main model
+- Reduces token usage and cost for verbose tool responses
+
+**Conversation Compaction** (`holmes/core/truncation/compaction.py`):
+- Long interactive sessions automatically compact conversation history to stay within context limits
+- Preserves recent context while summarizing older exchanges
+
+**Kubernetes Operator** (`holmes_operator/`):
+- Uses kopf framework for CRD handling
+- Manages `HealthCheck` and `ScheduledHealthCheck` custom resources
+- Tests in `tests/holmes_operator/`
+
 ## Testing Framework
 
 **Three-tier testing approach**:
@@ -190,6 +209,7 @@ For the complete eval CLI reference (flags, env vars, model comparison, debuggin
 
 **Key Configuration Sections**:
 - `model`: LLM model to use (default: gpt-4.1)
+- `fast_model`: Cheaper model for summarizing large tool outputs (e.g., `gpt-4o-mini`)
 - `api_key`: LLM API key (or use environment variables)
 - `custom_toolsets`: Override or add toolsets
 - `custom_runbooks`: Add investigation runbooks
@@ -224,7 +244,7 @@ For the complete eval CLI reference (flags, env vars, model comparison, debuggin
 - All new features require unit tests
 - New toolsets require integration tests
 - Complex investigations should have LLM evaluation tests
-- Maintain 40% minimum test coverage
+- Maintain 46% minimum test coverage (configured in pyproject.toml `fail_under`)
 - **Live execution is now enabled by default** to ensure tests match real-world behavior
 
 **Pull Request Process**:

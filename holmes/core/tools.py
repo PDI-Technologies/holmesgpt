@@ -2,6 +2,7 @@ import fnmatch
 import json
 import logging
 import os
+import platform
 import re
 import shlex
 import subprocess
@@ -572,7 +573,8 @@ class YAMLTool(Tool, BaseModel):
         ) as temp_script:
             temp_script.write(rendered_script)
             temp_script_path = temp_script.name
-        subprocess.run(["chmod", "+x", temp_script_path], check=True)
+        if platform.system() != "Windows":
+            subprocess.run(["chmod", "+x", temp_script_path], check=True)
 
         try:
             output, return_code = self.__execute_subprocess(temp_script_path)
@@ -588,15 +590,41 @@ class YAMLTool(Tool, BaseModel):
             logger.debug(f"Running `{cmd}`")
             protected_cmd = get_ulimit_prefix() + cmd
 
-            result = subprocess.run(
-                protected_cmd,
-                shell=True,
-                text=True,
-                check=False,  # do not throw error, we just return the error code
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-            )
+            # On Windows, shell=True uses cmd.exe which can't handle bash syntax
+            # (ulimit, pipes, etc.). Run through bash explicitly instead.
+            if platform.system() == "Windows":
+                import shutil
+
+                bash_path = shutil.which("bash")
+                if bash_path:
+                    result = subprocess.run(
+                        [bash_path, "-c", protected_cmd],
+                        text=True,
+                        check=False,
+                        stdin=subprocess.DEVNULL,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
+                    )
+                else:
+                    result = subprocess.run(
+                        protected_cmd,
+                        shell=True,
+                        text=True,
+                        check=False,
+                        stdin=subprocess.DEVNULL,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
+                    )
+            else:
+                result = subprocess.run(
+                    protected_cmd,
+                    shell=True,
+                    text=True,
+                    check=False,
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                )
 
             output = result.stdout.strip()
             output = check_oom_and_append_hint(output, result.returncode)

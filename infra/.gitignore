@@ -1,0 +1,10 @@
+# OpenTofu state and local files
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+*.tfplan
+
+# Sensitive variable files
+*.auto.tfvars
+secret.tfvars

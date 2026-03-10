@@ -171,3 +171,21 @@ config_toolsets.yaml
 **/.claude/settings.local.json
 .claude-trace/
 eval_results.json
+
+# Un-ignore frontend source code (the global lib/ rule on line 22 catches it)
+!infra/frontend/src/lib/
+!infra/frontend/src/lib/**
+
+# Infrastructure (Terraform/OpenTofu)
+infra/.terraform/
+infra/**/*.tfstate
+infra/**/*.tfstate.backup
+infra/**/*.tfplan
+infra/envs/*.auto.tfvars
+
+# Frontend build artifacts
+infra/frontend/node_modules/
+infra/frontend/dist/
+
+# Playwright test screenshots
+screenshots/
