@@ -79,6 +79,9 @@ build/
 dist/
 *.spec
 
+# Frontend node_modules (installed inside Docker)
+infra/frontend/node_modules/
+
 # Evaluation/test artifacts
 evals_report.txt
 evals_report.md

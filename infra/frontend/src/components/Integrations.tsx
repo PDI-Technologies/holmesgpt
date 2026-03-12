@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { api, type Integration, type ConfigField } from '../lib/api'
+import { api, type Integration, type ConfigField, type AwsAccount } from '../lib/api'
 
 type StatusFilter = 'all' | 'enabled' | 'disabled' | 'failed'
 type TypeFilter = 'all' | 'built-in' | 'mcp' | 'custom' | 'http' | 'database'
@@ -305,10 +305,12 @@ function IntegrationCard({
   integration,
   onToggle,
   onConfigure,
+  awsAccounts,
 }: {
   integration: Integration
   onToggle: (name: string, enabled: boolean) => void
   onConfigure: (integration: Integration) => void
+  awsAccounts?: AwsAccount[]
 }) {
   const colors = STATUS_COLORS[integration.status] || STATUS_COLORS.disabled
   const [toggling, setToggling] = useState(false)
@@ -378,6 +380,20 @@ function IntegrationCard({
         </p>
       )}
 
+      {integration.name === 'aws_api' && awsAccounts && awsAccounts.length > 0 && (
+        <div className="space-y-1.5">
+          {awsAccounts.map((acc) => (
+            <div key={acc.account_id} className="flex items-center justify-between text-xs">
+              <span className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-pdi-grass shrink-0" />
+                <span className="text-pdi-granite font-medium">{acc.name}</span>
+              </span>
+              <span className="text-pdi-slate font-mono">{acc.account_id}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
       {integration.error && (
         <div className="text-xs text-pdi-orange bg-pdi-orange/5 border border-pdi-orange/20 rounded-lg px-3 py-2">
           {integration.error}
@@ -426,9 +442,11 @@ export default function Integrations() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all')
   const [configuring, setConfiguring] = useState<Integration | null>(null)
+  const [awsAccounts, setAwsAccounts] = useState<AwsAccount[]>([])
 
   useEffect(() => {
     loadIntegrations()
+    api.getAwsAccounts().then((data) => setAwsAccounts(data.accounts)).catch(() => {})
   }, [])
 
   async function loadIntegrations() {
@@ -564,6 +582,7 @@ export default function Integrations() {
                   integration={integration}
                   onToggle={handleToggle}
                   onConfigure={setConfiguring}
+                  awsAccounts={awsAccounts}
                 />
               ))}
             </div>

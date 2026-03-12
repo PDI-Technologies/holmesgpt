@@ -17,7 +17,7 @@ export function useInvestigate() {
   const [loading, setLoading] = useState(false)
 
   const investigate = useCallback(
-    async (title: string, description: string, source: string) => {
+    async (title: string, description: string, source: string, context: Record<string, string> = {}) => {
       const inv: Investigation = {
         id: crypto.randomUUID(),
         title,
@@ -38,7 +38,7 @@ export function useInvestigate() {
           title,
           description,
           subject: { name: title },
-          context: {},
+          context,
           include_tool_calls: true,
           include_tool_call_results: true,
         })

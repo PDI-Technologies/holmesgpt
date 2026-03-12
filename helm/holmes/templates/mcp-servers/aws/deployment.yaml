@@ -40,7 +40,7 @@ metadata:
     app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/component: mcp-server
     app.kubernetes.io/part-of: holmes
-  {{- if and .Values.mcpAddons.aws.serviceAccount.annotations (not (and .Values.mcpAddons.aws.multiAccount.enabled .Values.mcpAddons.aws.multiAccount.profiles)) }}
+  {{- if .Values.mcpAddons.aws.serviceAccount.annotations }}
   annotations:
     {{- toYaml .Values.mcpAddons.aws.serviceAccount.annotations | nindent 4 }}
   {{- end }}
@@ -96,13 +96,6 @@ spec:
           items:
           - key: accounts.yaml
             path: accounts.yaml
-      - name: eks-token
-        projected:
-          sources:
-          - serviceAccountToken:
-              path: token
-              expirationSeconds: 86400
-              audience: sts.amazonaws.com
       {{- end }}
       containers:
       - name: aws-mcp
@@ -136,9 +129,6 @@ spec:
         volumeMounts:
         - name: aws-accounts
           mountPath: /etc/aws
-          readOnly: true
-        - name: eks-token
-          mountPath: /var/run/secrets/eks.amazonaws.com/serviceaccount
           readOnly: true
         {{- end }}
         resources:

@@ -41,7 +41,7 @@ holmes_image_tag = "latest"
 
 # UI Auth
 holmes_ui_username = "admin"
-holmes_ui_password = "HolmesGPT@Dev2026!"
+holmes_ui_password = "" # Stored in Secrets Manager after first apply; set via TF_VAR_holmes_ui_password on first run
 
 # MCP Integration API Keys
 mcp_ado_api_key        = "" # Set via TF_VAR_mcp_ado_api_key or -var flag
@@ -54,3 +54,37 @@ tags = {
   CostCenter  = "engineering"
   Application = "holmesgpt"
 }
+
+# Logistics cross-account access
+# HolmesReadOnly roles are deployed via infra/logistics-cross-account/ into each account.
+# prod is intentionally excluded.
+logistics_accounts = {
+  logistics-ci = {
+    account_id = "229743609213"
+    role_arn   = "arn:aws:iam::229743609213:role/HolmesReadOnly"
+    region     = "us-east-1"
+  }
+  logistics-dev = {
+    account_id = "690917928966"
+    role_arn   = "arn:aws:iam::690917928966:role/HolmesReadOnly"
+    region     = "us-east-1"
+  }
+  logistics-stage = {
+    account_id = "178396448338"
+    role_arn   = "arn:aws:iam::178396448338:role/HolmesReadOnly"
+    region     = "us-east-1"
+  }
+  logistics-sandbox = {
+    account_id = "087983023125"
+    role_arn   = "arn:aws:iam::087983023125:role/HolmesReadOnly"
+    region     = "us-east-1"
+  }
+  logistics-prod = {
+    account_id = "342706430250"
+    role_arn   = "arn:aws:iam::342706430250:role/HolmesReadOnly"
+    region     = "eu-central-1"
+  }
+}
+
+# Enable the AWS MCP server addon now that real account IDs are set
+aws_mcp_enabled = true

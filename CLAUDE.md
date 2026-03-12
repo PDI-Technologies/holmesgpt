@@ -28,7 +28,6 @@ poetry run pytest tests -m "not llm"
 
 # Run LLM evaluation tests (requires API keys)
 make test-llm-ask-holmes          # Test single-question interactions
-make test-llm-investigate         # Test AlertManager investigations
 poetry run pytest tests/llm/ -n 6 -vv  # Run all LLM tests in parallel
 
 # Run pre-commit checks (includes ruff, mypy, poetry validation)
@@ -49,9 +48,23 @@ poetry run ruff check --fix
 poetry run mypy
 ```
 
+### Documentation
+```bash
+make docs          # Serve docs locally with live reload
+make docs-build    # Build static docs site
+make docs-strict   # Build docs with strict mode (fail on warnings)
+```
+
 ## Architecture Overview
 
 ### Core Components
+
+**HTTP API Server** (`server.py`):
+- FastAPI server with streaming responses (`/chat` endpoint)
+- Handles real-time streaming for interactive conversations
+- Runs scheduled prompts executor in background
+- Includes Sentry and OpenTelemetry tracing integration
+- Primary interface for production deployments (beyond CLI)
 
 **CLI Entry Point** (`holmes/main.py`):
 - Typer-based CLI with subcommands for `ask`, `investigate`, `toolset`
@@ -68,9 +81,13 @@ poetry run mypy
 
 **Core Investigation Engine** (`holmes/core/`):
 - `tool_calling_llm.py`: Main LLM interaction with tool calling capabilities
-- `investigation.py`: Orchestrates multi-step investigations with runbooks
 - `toolset_manager.py`: Manages available tools and their configurations
 - `tools.py`: Tool definitions and execution logic
+- `scheduled_prompts/`: Background executor for recurring investigations (used by `ScheduledHealthCheck` CRD)
+- `transformers/`: LLM-based output summarization using `fast_model` to compress verbose tool responses
+- `truncation/`: Conversation compaction (`compaction.py`) and context window management
+- `tools_utils/`: Token counting, per-tool output budgeting, filesystem result storage for large outputs
+- `supabase_dal.py`: Conversation history persistence (used in server deployments)
 
 **Plugin System** (`holmes/plugins/`):
 - **Sources**: AlertManager, Jira, PagerDuty, OpsGenie integrations

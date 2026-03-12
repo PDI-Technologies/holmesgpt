@@ -155,9 +155,44 @@ variable "mcp_salesforce_api_key" {
   default     = ""
 }
 
+# Grafana
+variable "grafana_url" {
+  description = "Grafana instance URL"
+  type        = string
+  default     = "https://grafana-us.shared.logistics.pdisoftware.com"
+}
+
+variable "grafana_api_key" {
+  description = "Grafana service account token for HolmesGPT"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
 # Tags
 variable "tags" {
   description = "Common tags for all resources"
   type        = map(string)
   default     = {}
+}
+
+# Logistics cross-account access
+# Map of profile name -> { account_id, role_arn, region }
+# The AWS MCP server will assume these roles to access each logistics account.
+variable "logistics_accounts" {
+  description = "Logistics AWS accounts for cross-account access via the AWS MCP server"
+  type = map(object({
+    account_id = string
+    role_arn   = string
+    region     = optional(string, "us-east-1")
+  }))
+  default = {}
+}
+
+# Set to true only after filling in real account IDs in logistics_accounts
+# and after deploying infra/logistics-cross-account/ into each target account.
+variable "aws_mcp_enabled" {
+  description = "Enable the AWS MCP server addon (requires real logistics_accounts values)"
+  type        = bool
+  default     = false
 }

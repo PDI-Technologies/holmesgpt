@@ -25,6 +25,16 @@ IMPORTANT: When investigating issues related to AWS resources or Kubernetes work
 3. ALWAYS query CloudTrail for recent configuration changes
 4. Look for patterns in timing between when issues started and when changes were made
 
+### When a query returns empty results:
+- **ALWAYS try other regions before concluding there are no resources.** The configured default region may not be where the workloads are deployed.
+- For EC2, ECS, RDS, Lambda, and other regional services, scan all common regions if the default returns nothing:
+  ```bash
+  for region in us-east-1 us-east-2 us-west-1 us-west-2 eu-west-1 eu-west-2 eu-central-1 ap-southeast-1 ap-southeast-2 ap-northeast-1; do
+    echo "=== $region ===" && aws ec2 describe-instances --region $region --profile PROFILE --query 'Reservations[*].Instances[*].[InstanceId,State.Name,Tags[?Key==`Name`].Value|[0]]' --output table 2>/dev/null
+  done
+  ```
+- If you find resources in a different region, note it and use that region for subsequent queries.
+
 ### When investigating database issues (RDS):
 - Get RDS instance status and configuration: `aws rds describe-db-instances --db-instance-identifier INSTANCE_ID`
 - Check security groups attached to RDS: Extract VpcSecurityGroups from the above
@@ -244,6 +254,18 @@ Pagination Strategy:
 {{- end -}}
 {{- if and .Values.mcpAddons.aws.multiAccount.enabled .Values.mcpAddons.aws.multiAccount.llm_account_descriptions }}
 
+## Multi-Account AWS Access
+
+This MCP server has access to multiple AWS accounts via cross-account role assumption.
+**ALWAYS use `--profile <account-name>` in every AWS CLI command to target the correct account.**
+
+Available accounts (use the exact profile name shown):
 {{ .Values.mcpAddons.aws.multiAccount.llm_account_descriptions }}
+
+**Rules:**
+- When the user mentions a specific account (e.g. "logistics-prod", "prod"), use `--profile logistics-prod`
+- When the user says "all accounts", run the command once per account with the appropriate `--profile`
+- NEVER run AWS commands without `--profile` — the default profile is the platform account, not a logistics account
+- Example: `aws ec2 describe-instances --region us-east-1 --profile logistics-prod`
 {{- end -}}
 {{- end -}}

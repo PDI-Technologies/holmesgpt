@@ -95,6 +95,39 @@ export interface IntegrationsResponse {
   integrations: Integration[];
 }
 
+export interface AwsAccount {
+  name: string;
+  account_id: string;
+  region: string;
+  role_arn: string;
+}
+
+export interface AwsAccountsResponse {
+  accounts: AwsAccount[];
+  irsa_role: string;
+}
+
+export interface LlmInstructionsEntry {
+  name: string;
+  description: string;
+  type: string;
+  icon_url: string | null;
+  enabled: boolean;
+  instructions: string;
+  has_default: boolean;
+  is_overridden: boolean;
+}
+
+export interface LlmInstructionsResponse {
+  integrations: LlmInstructionsEntry[];
+}
+
+export interface UpdateLlmInstructionsResponse {
+  name: string;
+  instructions: string;
+  is_overridden: boolean;
+}
+
 export const api = {
   chat(data: ChatRequest): Promise<ChatResponse> {
     return request('/api/chat', {
@@ -150,6 +183,27 @@ export const api = {
 
   getIntegrations(): Promise<IntegrationsResponse> {
     return request('/api/integrations');
+  },
+
+  getAwsAccounts(): Promise<AwsAccountsResponse> {
+    return request('/api/aws/accounts');
+  },
+
+  getLlmInstructions(): Promise<LlmInstructionsResponse> {
+    return request('/api/llm-instructions');
+  },
+
+  updateLlmInstructions(name: string, instructions: string): Promise<UpdateLlmInstructionsResponse> {
+    return request(`/api/llm-instructions/${encodeURIComponent(name)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ instructions }),
+    });
+  },
+
+  resetLlmInstructions(name: string): Promise<UpdateLlmInstructionsResponse> {
+    return request(`/api/llm-instructions/${encodeURIComponent(name)}`, {
+      method: 'DELETE',
+    });
   },
 
   toggleIntegration(name: string, enabled: boolean): Promise<Integration> {

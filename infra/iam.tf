@@ -31,8 +31,53 @@ resource "aws_iam_policy" "holmes_secrets" {
           "secretsmanager:DescribeSecret"
         ]
         Resource = [
-          aws_secretsmanager_secret.anthropic_api_key.arn
+          aws_secretsmanager_secret.anthropic_api_key.arn,
+          aws_secretsmanager_secret.mcp_api_keys.arn,
+          aws_secretsmanager_secret.holmes_ui_credentials.arn,
+          aws_secretsmanager_secret.grafana.arn,
         ]
+      }
+    ]
+  })
+}
+
+# IRSA role for the AWS MCP server pod - allows assuming roles in logistics accounts
+# Only created when aws_mcp_enabled = true (i.e., real account IDs are in logistics_accounts)
+locals {
+  logistics_role_arns = [for _, cfg in var.logistics_accounts : cfg.role_arn]
+}
+
+module "aws_mcp_irsa" {
+  count   = var.aws_mcp_enabled ? 1 : 0
+  source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
+  version = "~> 5.0"
+
+  role_name = "${local.cluster_name}-aws-mcp"
+
+  oidc_providers = {
+    main = {
+      provider_arn               = module.eks.oidc_provider_arn
+      namespace_service_accounts = ["holmesgpt:aws-api-mcp-sa"]
+    }
+  }
+
+  role_policy_arns = {
+    cross_account = aws_iam_policy.aws_mcp_cross_account[0].arn
+  }
+}
+
+resource "aws_iam_policy" "aws_mcp_cross_account" {
+  count       = var.aws_mcp_enabled ? 1 : 0
+  name        = "${local.cluster_name}-aws-mcp-cross-account"
+  description = "Allow AWS MCP server to assume roles in logistics accounts"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = "sts:AssumeRole"
+        Resource = local.logistics_role_arns
       }
     ]
   })

@@ -32,3 +32,8 @@ output "docker_push_command" {
   description = "Command to build and push Holmes image"
   value       = "docker build -t ${aws_ecr_repository.holmesgpt.repository_url}:${var.holmes_image_tag} . && docker push ${aws_ecr_repository.holmesgpt.repository_url}:${var.holmes_image_tag}"
 }
+
+output "aws_mcp_irsa_role_arn" {
+  description = "ARN of the AWS MCP IRSA role — use this as holmes_mcp_role_arn when deploying infra/logistics-cross-account/"
+  value       = var.aws_mcp_enabled ? module.aws_mcp_irsa[0].iam_role_arn : "Not created yet — set aws_mcp_enabled=true after filling in real account IDs"
+}

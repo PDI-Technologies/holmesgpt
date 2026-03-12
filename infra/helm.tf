@@ -1,3 +1,10 @@
+# Locals to decode Secrets Manager values for use in this file
+locals {
+  mcp_keys  = jsondecode(data.aws_secretsmanager_secret_version.mcp_api_keys.secret_string)
+  ui_creds  = jsondecode(data.aws_secretsmanager_secret_version.holmes_ui_credentials.secret_string)
+  grafana   = jsondecode(data.aws_secretsmanager_secret_version.grafana.secret_string)
+}
+
 # Kubernetes namespace for Holmes
 resource "kubernetes_namespace" "holmesgpt" {
   metadata {
@@ -15,13 +22,15 @@ resource "kubernetes_secret" "holmes_api_keys" {
   }
 
   data = {
-    ANTHROPIC_API_KEY    = var.anthropic_api_key
-    ANTHROPIC_API_BASE   = var.anthropic_api_base
-    HOLMES_UI_USERNAME   = var.holmes_ui_username
-    HOLMES_UI_PASSWORD   = var.holmes_ui_password
-    MCP_ADO_API_KEY        = var.mcp_ado_api_key
-    MCP_ATLASSIAN_API_KEY  = var.mcp_atlassian_api_key
-    MCP_SALESFORCE_API_KEY = var.mcp_salesforce_api_key
+    ANTHROPIC_API_KEY      = var.anthropic_api_key
+    ANTHROPIC_API_BASE     = var.anthropic_api_base
+    HOLMES_UI_USERNAME     = local.ui_creds["HOLMES_UI_USERNAME"]
+    HOLMES_UI_PASSWORD     = local.ui_creds["HOLMES_UI_PASSWORD"]
+    MCP_ADO_API_KEY        = local.mcp_keys["MCP_ADO_API_KEY"]
+    MCP_ATLASSIAN_API_KEY  = local.mcp_keys["MCP_ATLASSIAN_API_KEY"]
+    MCP_SALESFORCE_API_KEY = local.mcp_keys["MCP_SALESFORCE_API_KEY"]
+    GRAFANA_API_KEY        = local.grafana["GRAFANA_API_KEY"]
+    GRAFANA_URL            = local.grafana["GRAFANA_URL"]
   }
 
   type = "Opaque"
@@ -116,6 +125,39 @@ resource "helm_release" "holmes" {
               key  = "MCP_SALESFORCE_API_KEY"
             }
           }
+        },
+        {
+          name = "GRAFANA_API_KEY"
+          valueFrom = {
+            secretKeyRef = {
+              name = kubernetes_secret.holmes_api_keys.metadata[0].name
+              key  = "GRAFANA_API_KEY"
+            }
+          }
+        },
+        {
+          name = "GRAFANA_URL"
+          valueFrom = {
+            secretKeyRef = {
+              name = kubernetes_secret.holmes_api_keys.metadata[0].name
+              key  = "GRAFANA_URL"
+            }
+          }
+        },
+        {
+          name  = "AWS_MCP_ACCOUNTS"
+          value = jsonencode([
+            for name, cfg in var.logistics_accounts : {
+              name       = name
+              account_id = cfg.account_id
+              region     = cfg.region
+              role_arn   = cfg.role_arn
+            }
+          ])
+        },
+        {
+          name  = "AWS_MCP_IRSA_ROLE"
+          value = var.aws_mcp_enabled ? module.aws_mcp_irsa[0].iam_role_arn : ""
         }
       ]
 
@@ -133,6 +175,13 @@ resource "helm_release" "holmes" {
         "kubernetes/core" = { enabled = true }
         "kubernetes/logs" = { enabled = true }
         "prometheus/metrics" = { enabled = true }
+        "grafana/dashboards" = {
+          enabled = true
+          config  = {
+            api_url = "{{ env.GRAFANA_URL }}"
+            api_key = "{{ env.GRAFANA_API_KEY }}"
+          }
+        }
         "bash" = {
           enabled = true
           config  = { builtin_allowlist = "extended" }
@@ -142,8 +191,8 @@ resource "helm_release" "holmes" {
         "internet"           = { enabled = true }
       }
 
-      mcp_servers = var.mcp_ado_api_key != "" || var.mcp_atlassian_api_key != "" || var.mcp_salesforce_api_key != "" ? merge(
-        var.mcp_ado_api_key != "" ? {
+      mcp_servers = local.mcp_keys["MCP_ADO_API_KEY"] != "" || local.mcp_keys["MCP_ATLASSIAN_API_KEY"] != "" || local.mcp_keys["MCP_SALESFORCE_API_KEY"] != "" ? merge(
+        local.mcp_keys["MCP_ADO_API_KEY"] != "" ? {
           ado = {
             description = "Azure DevOps - work items, repositories, pipelines, and boards"
             config = {
@@ -157,7 +206,7 @@ resource "helm_release" "holmes" {
             llm_instructions = "Use this toolset to query Azure DevOps work items, pull requests, repositories, pipelines, and boards. Prefer WIQL queries for work item searches."
           }
         } : {},
-        var.mcp_atlassian_api_key != "" ? {
+        local.mcp_keys["MCP_ATLASSIAN_API_KEY"] != "" ? {
           atlassian = {
             description = "Atlassian - Jira issues, Confluence pages, and project boards"
             config = {
@@ -171,7 +220,7 @@ resource "helm_release" "holmes" {
             llm_instructions = "Use this toolset to search and retrieve Jira issues, Confluence pages, and Atlassian project information. Prefer JQL for Jira queries."
           }
         } : {},
-        var.mcp_salesforce_api_key != "" ? {
+        local.mcp_keys["MCP_SALESFORCE_API_KEY"] != "" ? {
           salesforce = {
             description = "Salesforce - accounts, contacts, opportunities, cases, and CRM data"
             config = {
@@ -186,6 +235,52 @@ resource "helm_release" "holmes" {
           }
         } : {}
       ) : {}
+
+      mcpAddons = {
+        aws = {
+          enabled = var.aws_mcp_enabled
+          serviceAccount = {
+            create = true
+            name   = "aws-api-mcp-sa"
+            annotations = {
+              "eks.amazonaws.com/role-arn" = var.aws_mcp_enabled ? module.aws_mcp_irsa[0].iam_role_arn : ""
+            }
+          }
+          config = {
+            region       = var.aws_region
+            readOnlyMode = true
+          }
+          multiAccount = {
+            enabled  = length(var.logistics_accounts) > 0
+            profiles = {
+              for name, cfg in var.logistics_accounts : name => {
+                account_id = cfg.account_id
+                role_arn   = cfg.role_arn
+                region     = cfg.region
+              }
+            }
+            llm_account_descriptions = join("\n", concat(
+              [
+                "ALWAYS use --profile <account-name> in every AWS CLI command to target the correct account.",
+                "NEVER run AWS commands without --profile — the default profile is the platform account, not a logistics account.",
+                "When the user mentions a specific account, use --profile <that-account-name>.",
+                "When the user says 'all accounts', run the command once per account with the appropriate --profile.",
+                "Example: aws ec2 describe-instances --region us-east-1 --profile logistics-prod",
+                "",
+                "IMPORTANT: Each account has a primary region listed below. If a query returns empty results in that region,",
+                "scan other regions (us-east-1, us-east-2, eu-west-1, eu-central-1, ap-southeast-1, etc.) before concluding",
+                "there are no resources. Workloads may be deployed in regions other than the primary.",
+                "",
+                "Available accounts (use exact profile name):",
+              ],
+              [
+                for name, cfg in var.logistics_accounts :
+                "  --profile ${name}  →  account ${cfg.account_id} (primary region: ${cfg.region})"
+              ]
+            ))
+          }
+        }
+      }
     })
   ]
 
@@ -210,6 +305,7 @@ resource "kubernetes_ingress_v1" "holmes" {
       "alb.ingress.kubernetes.io/subnets"               = join(",", var.public_subnet_ids)
       "alb.ingress.kubernetes.io/healthcheck-path"      = "/healthz"
       "alb.ingress.kubernetes.io/healthcheck-interval-seconds" = "30"
+      "alb.ingress.kubernetes.io/load-balancer-attributes" = "idle_timeout.timeout_seconds=300"
     }
   }
 

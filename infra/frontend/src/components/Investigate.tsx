@@ -1,20 +1,40 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useInvestigate } from '../hooks/useInvestigate'
 import MessageBubble from './MessageBubble'
 import ToolCallCard from './ToolCallCard'
+import { api, AwsAccount } from '../lib/api'
 
-const SOURCES = ['Manual', 'AlertManager', 'PagerDuty', 'Jira', 'OpsGenie', 'Salesforce', 'Azure DevOps']
+const SOURCES = ['Manual', 'AlertManager', 'PagerDuty', 'Jira', 'OpsGenie', 'Salesforce', 'Azure DevOps', 'AWS CloudWatch']
 
 export default function Investigate() {
   const { investigations, loading, investigate, clearInvestigations } = useInvestigate()
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [source, setSource] = useState('Manual')
+  const [awsAccount, setAwsAccount] = useState('')
+  const [awsAccounts, setAwsAccounts] = useState<AwsAccount[]>([])
+
+  useEffect(() => {
+    api.getAwsAccounts().then((data) => setAwsAccounts(data.accounts)).catch(() => {})
+  }, [])
+
+  // Reset account selection when source changes away from AWS CloudWatch
+  useEffect(() => {
+    if (source !== 'AWS CloudWatch') setAwsAccount('')
+  }, [source])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!title.trim() || !description.trim() || loading) return
-    investigate(title.trim(), description.trim(), source)
+
+    const context: Record<string, string> = {}
+    if (source === 'AWS CloudWatch' && awsAccount) {
+      context.aws_account = awsAccount
+      const found = awsAccounts.find((a) => a.name === awsAccount)
+      if (found) context.aws_account_id = found.account_id
+    }
+
+    investigate(title.trim(), description.trim(), source, context)
     setTitle('')
     setDescription('')
   }
@@ -41,8 +61,8 @@ export default function Investigate() {
         {/* Form */}
         <div className="px-6 py-5 border-b border-gray-200 bg-white">
           <form onSubmit={handleSubmit} className="space-y-3 max-w-2xl">
-            <div className="flex gap-3">
-              <div className="flex-1">
+            <div className="flex gap-3 flex-wrap">
+              <div className="flex-1 min-w-0">
                 <label htmlFor="inv-title" className="block text-xs font-medium text-pdi-granite mb-1">
                   Alert Title
                 </label>
@@ -56,7 +76,7 @@ export default function Investigate() {
                   required
                 />
               </div>
-              <div className="w-40">
+              <div className="w-44 shrink-0">
                 <label htmlFor="inv-source" className="block text-xs font-medium text-pdi-granite mb-1">
                   Source
                 </label>
@@ -71,7 +91,39 @@ export default function Investigate() {
                   ))}
                 </select>
               </div>
+
+              {/* AWS account sub-selector */}
+              {source === 'AWS CloudWatch' && awsAccounts.length > 0 && (
+                <div className="w-44 shrink-0">
+                  <label htmlFor="inv-aws-account" className="block text-xs font-medium text-pdi-granite mb-1">
+                    AWS Account
+                  </label>
+                  <select
+                    id="inv-aws-account"
+                    value={awsAccount}
+                    onChange={(e) => setAwsAccount(e.target.value)}
+                    className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent bg-white"
+                  >
+                    <option value="">All accounts</option>
+                    {awsAccounts.map((acc) => (
+                      <option key={acc.account_id} value={acc.name}>
+                        {acc.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
+
+            {/* AWS CloudWatch hint */}
+            {source === 'AWS CloudWatch' && (
+              <div className="flex items-start gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                <svg className="w-3.5 h-3.5 mt-0.5 shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                  <path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm8.706-1.442c1.146-.573 2.437.463 2.126 1.706l-.709 2.836.042-.02a.75.75 0 01.67 1.34l-.04.022c-1.147.573-2.438-.463-2.127-1.706l.71-2.836-.042.02a.75.75 0 11-.671-1.34l.041-.022zM12 9a.75.75 0 100-1.5.75.75 0 000 1.5z" clipRule="evenodd" />
+                </svg>
+                Describe the CloudWatch alarm or metric anomaly. Holmes will query the selected AWS account to investigate.
+              </div>
+            )}
 
             <div>
               <label htmlFor="inv-desc" className="block text-xs font-medium text-pdi-granite mb-1">
@@ -81,7 +133,11 @@ export default function Investigate() {
                 id="inv-desc"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Describe the alert or issue in detail..."
+                placeholder={
+                  source === 'AWS CloudWatch'
+                    ? 'e.g., CPUUtilization alarm triggered on logistics-prod ECS service, threshold 80% exceeded for 15 minutes'
+                    : 'Describe the alert or issue in detail...'
+                }
                 rows={3}
                 className="w-full px-3 py-2 border border-pdi-cool-gray rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-pdi-sky focus:border-transparent resize-none"
                 required

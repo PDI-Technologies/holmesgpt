@@ -343,6 +343,124 @@ def mount_frontend(app: FastAPI, config=None) -> None:
 
         return JSONResponse({"ok": True, "name": name})
 
+    @app.get("/api/aws/accounts")
+    async def get_aws_accounts():
+        """Return configured AWS accounts for the multi-account MCP setup."""
+        import json as _json
+        raw = os.environ.get("AWS_MCP_ACCOUNTS", "[]")
+        try:
+            accounts = _json.loads(raw)
+        except Exception:
+            accounts = []
+        return JSONResponse({
+            "accounts": accounts,
+            "irsa_role": os.environ.get("AWS_MCP_IRSA_ROLE", ""),
+        })
+
+    # ── LLM Instructions helpers ──────────────────────────────────────────────
+
+    def _is_mcp_toolset(name: str) -> bool:
+        """Return True if the named toolset is an MCP server."""
+        if config is None:
+            return False
+        if config.mcp_servers and name in config.mcp_servers:
+            return True
+        if config._server_tool_executor:
+            for t in config._server_tool_executor.toolsets:
+                if t.name == name:
+                    ts_type = t.type.value if t.type and hasattr(t.type, "value") else ""
+                    return ts_type == "mcp"
+        return False
+
+    def _is_instructions_overridden(name: str) -> bool:
+        """Return True if a user override exists for this toolset's llm_instructions."""
+        if config is None:
+            return False
+        if config.mcp_servers and name in config.mcp_servers:
+            return "llm_instructions" in config.mcp_servers[name]
+        if config.toolsets and name in config.toolsets:
+            return "llm_instructions" in config.toolsets[name]
+        return False
+
+    # ── LLM Instructions endpoints ────────────────────────────────────────────
+
+    @app.get("/api/llm-instructions")
+    async def get_llm_instructions():
+        """Return current llm_instructions for every loaded toolset."""
+        if not _ensure_tool_executor():
+            return JSONResponse({"integrations": []})
+        result = []
+        for toolset in config._server_tool_executor.toolsets:
+            result.append({
+                "name": toolset.name,
+                "description": toolset.description or "",
+                "type": toolset.type.value if toolset.type and hasattr(toolset.type, "value") else "built-in",
+                "icon_url": getattr(toolset, "icon_url", None),
+                "enabled": toolset.enabled,
+                "instructions": toolset.llm_instructions or "",
+                "has_default": bool(toolset.llm_instructions),
+                "is_overridden": _is_instructions_overridden(toolset.name),
+            })
+        return JSONResponse({"integrations": result})
+
+    @app.put("/api/llm-instructions/{name:path}")
+    async def update_llm_instructions(name: str, request: Request):
+        """Override llm_instructions for one toolset and hot-reload."""
+        if not _ensure_tool_executor():
+            raise HTTPException(status_code=503, detail="Tool executor not available")
+        body = await request.json()
+        instructions: str = body.get("instructions", "")
+        if _is_mcp_toolset(name):
+            if config.mcp_servers is None:
+                config.mcp_servers = {}
+            config.mcp_servers.setdefault(name, {})["llm_instructions"] = instructions
+        else:
+            if config.toolsets is None:
+                config.toolsets = {}
+            config.toolsets.setdefault(name, {})["llm_instructions"] = instructions
+        try:
+            config._toolset_manager = None
+            config._server_tool_executor = None
+            config.create_tool_executor(config.dal)
+        except Exception as e:
+            logging.error(f"Failed to reload toolsets after llm_instructions update: {e}")
+            raise HTTPException(status_code=500, detail=f"Reload failed: {str(e)}")
+        for toolset in config._server_tool_executor.toolsets:
+            if toolset.name == name:
+                return JSONResponse({
+                    "name": toolset.name,
+                    "instructions": toolset.llm_instructions or "",
+                    "is_overridden": True,
+                })
+        return JSONResponse({"ok": True, "name": name})
+
+    @app.delete("/api/llm-instructions/{name:path}")
+    async def reset_llm_instructions(name: str):
+        """Remove a user override, restoring the toolset's default llm_instructions."""
+        if not _ensure_tool_executor():
+            raise HTTPException(status_code=503, detail="Tool executor not available")
+        if _is_mcp_toolset(name):
+            if config.mcp_servers and name in config.mcp_servers:
+                config.mcp_servers[name].pop("llm_instructions", None)
+        else:
+            if config.toolsets and name in config.toolsets:
+                config.toolsets[name].pop("llm_instructions", None)
+        try:
+            config._toolset_manager = None
+            config._server_tool_executor = None
+            config.create_tool_executor(config.dal)
+        except Exception as e:
+            logging.error(f"Failed to reload toolsets after llm_instructions reset: {e}")
+            raise HTTPException(status_code=500, detail=f"Reload failed: {str(e)}")
+        for toolset in config._server_tool_executor.toolsets:
+            if toolset.name == name:
+                return JSONResponse({
+                    "name": toolset.name,
+                    "instructions": toolset.llm_instructions or "",
+                    "is_overridden": False,
+                })
+        return JSONResponse({"ok": True, "name": name})
+
     # Static file serving - must be registered last (catch-all)
     @app.get("/{path:path}")
     async def serve_frontend(path: str):
