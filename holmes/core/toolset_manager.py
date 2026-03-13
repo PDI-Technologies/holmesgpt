@@ -234,6 +234,19 @@ class ToolsetManager:
                 toolset_name, builtin_toolset_names
             )
 
+            # Multi-instance Python toolset: "basename:suffix" pattern
+            # e.g. "grafana/dashboards:logistics" → new GrafanaToolset(name="grafana/dashboards:logistics")
+            if ":" in toolset_name:
+                base_name, _suffix = toolset_name.split(":", 1)
+                from holmes.plugins.toolsets import PYTHON_TOOLSET_FACTORIES  # noqa: PLC0415
+
+                if base_name in PYTHON_TOOLSET_FACTORIES:
+                    toolset_config = dict(toolset_config)  # shallow copy to avoid mutating caller's dict
+                    toolset_config["_python_base"] = base_name
+                    toolset_config["_instance_name"] = toolset_name
+                    custom_toolsets_dict[toolset_name] = toolset_config
+                    continue
+
             if toolset_name in builtin_toolset_names:
                 # Direct reference to builtin toolset by name
                 builtin_toolsets_dict[toolset_name] = toolset_config

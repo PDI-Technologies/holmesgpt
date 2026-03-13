@@ -50,9 +50,9 @@ def _build_grafana_dashboard_url(
 class GrafanaToolset(BaseGrafanaToolset):
     config_class: ClassVar[Type[GrafanaDashboardConfig]] = GrafanaDashboardConfig
 
-    def __init__(self):
+    def __init__(self, name: str = "grafana/dashboards"):
         super().__init__(
-            name="grafana/dashboards",
+            name=name,
             description="Provides tools for interacting with Grafana dashboards",
             icon_url="https://w7.pngwing.com/pngs/434/923/png-transparent-grafana-hd-logo-thumbnail.png",
             docs_url="https://holmesgpt.dev/data-sources/builtin-toolsets/grafanadashboards/",

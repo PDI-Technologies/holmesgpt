@@ -94,6 +94,71 @@ The MCP server connected but returned no tools. Check:
 
 ---
 
+## Projects API Debugging
+
+### List all projects
+
+```bash
+curl -s -b /tmp/cookies.txt \
+  https://holmesgpt.dev.platform.pditechnologies.com/api/projects \
+  | python3 -c "import sys,json; [print(p['name'], '-', len(p['instances']), 'instances') for p in json.load(sys.stdin)['projects']]"
+```
+
+### Check DynamoDB table directly
+
+```bash
+aws dynamodb scan \
+  --table-name holmesgpt-dev-config \
+  --profile pdi-platform-dev \
+  --region us-east-1 \
+  --filter-expression "begins_with(pk, :p)" \
+  --expression-attribute-values '{":p":{"S":"PROJECT#"}}' \
+  | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'{d[\"Count\"]} projects in DynamoDB')"
+```
+
+### Verify HOLMES_DYNAMODB_TABLE env var is set in pod
+
+```bash
+kubectl exec -n holmesgpt deployment/holmes-holmes -- \
+  env | grep HOLMES_DYNAMODB_TABLE
+# Expected: HOLMES_DYNAMODB_TABLE=holmesgpt-dev-config
+```
+
+### Test project-scoped chat
+
+```bash
+# Get a project ID first
+PROJECT_ID=$(curl -s -b /tmp/cookies.txt \
+  https://holmesgpt.dev.platform.pditechnologies.com/api/projects \
+  | python3 -c "import sys,json; p=json.load(sys.stdin)['projects']; print(p[0]['id'] if p else '')")
+
+cat > /tmp/chat-project.json << EOF
+{"ask": "What tools do you have available?", "project_id": "$PROJECT_ID"}
+EOF
+
+curl -s -b /tmp/cookies.txt \
+  -X POST https://holmesgpt.dev.platform.pditechnologies.com/api/chat \
+  -H "Content-Type: application/json" \
+  -d @/tmp/chat-project.json \
+  | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('analysis','')[:500])"
+```
+
+### Common project errors
+
+**`Project not found`** — project_id in request doesn't exist in DynamoDB. Check the project was saved correctly.
+
+**`Failed to build project executor`** — check pod logs for the specific toolset that failed:
+```bash
+kubectl logs -n holmesgpt -l app.kubernetes.io/name=holmes --tail=100 \
+  | grep -i "project\|toolset\|secret"
+```
+
+**`Secret has no api_key field`** — MCP toolset secret in Secrets Manager must contain `{"api_key": "..."}`.
+
+**AWS accounts not filtering** — verify `aws_accounts` field is set on the instance and the account names match exactly what's in `logistics_accounts` Terraform variable.
+
+---
+
 ## Pod Issues
 
 ### Get kubeconfig

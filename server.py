@@ -365,9 +365,43 @@ def chat(chat_request: ChatRequest, http_request: Request):
 
         storage = tool_result_storage()
         tool_results_dir = storage.__enter__()
-        ai = config.create_toolcalling_llm(
-            dal=dal, model=chat_request.model, tool_results_dir=tool_results_dir
-        )
+
+        # Build a project-scoped ToolCallingLLM when project_id is provided
+        if chat_request.project_id:
+            try:
+                import sys
+                import os as _os
+                _frontend_dir = _os.path.join(_os.path.dirname(__file__), "infra", "frontend")
+                if _frontend_dir not in sys.path:
+                    sys.path.insert(0, _frontend_dir)
+                from projects import get_store, build_project_tool_executor  # type: ignore  # noqa: PLC0415
+
+                project = get_store().get(chat_request.project_id)
+                if project:
+                    from holmes.core.tool_calling_llm import ToolCallingLLM  # noqa: PLC0415
+
+                    project_executor = build_project_tool_executor(project, config, dal)
+                    ai = ToolCallingLLM(
+                        project_executor,
+                        config.max_steps,
+                        config._get_llm(chat_request.model),
+                        tool_results_dir=tool_results_dir,
+                    )
+                    logging.info("Using project-scoped tool executor for project '%s'", project.name)
+                else:
+                    logging.warning("Project '%s' not found, falling back to global executor", chat_request.project_id)
+                    ai = config.create_toolcalling_llm(
+                        dal=dal, model=chat_request.model, tool_results_dir=tool_results_dir
+                    )
+            except Exception:
+                logging.warning("Failed to build project executor, falling back to global", exc_info=True)
+                ai = config.create_toolcalling_llm(
+                    dal=dal, model=chat_request.model, tool_results_dir=tool_results_dir
+                )
+        else:
+            ai = config.create_toolcalling_llm(
+                dal=dal, model=chat_request.model, tool_results_dir=tool_results_dir
+            )
         global_instructions = dal.get_global_instructions_for_account()
         messages = build_chat_messages(
             chat_request.ask,

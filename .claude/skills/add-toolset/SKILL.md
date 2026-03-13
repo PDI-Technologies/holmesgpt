@@ -191,6 +191,24 @@ from holmes.plugins.toolsets.myservice.myservice import MyServiceToolset
 toolsets.append(MyServiceToolset())
 ```
 
+### Register for Project Scoping (Optional)
+
+If the toolset should be available for per-project credential isolation (different teams using different API keys), also add it to `PYTHON_TOOLSET_FACTORIES` and add an optional `name` parameter to the class:
+
+```python
+# In __init__.py, add to PYTHON_TOOLSET_FACTORIES dict:
+PYTHON_TOOLSET_FACTORIES["myservice/core"] = MyServiceToolset
+
+# In myservice.py, add optional name param:
+class MyServiceToolset(Toolset):
+    def __init__(self, name: str = "myservice/core"):
+        super().__init__(name=name, ...)
+```
+
+Also add to `TOOLSET_TYPES` array in `infra/frontend/src/components/Projects.tsx`.
+
+This enables the `basename:suffix` multi-instance pattern (e.g. `myservice/core:team-a`, `myservice/core:team-b`) and per-project Secrets Manager credential fetching. See the `manage-projects` skill for full details.
+
 ---
 
 ## Step 5: Critical Implementation Rules

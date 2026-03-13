@@ -85,7 +85,7 @@ export TF_VAR_mcp_salesforce_api_key="your-salesforce-api-key"
 # Plan first
 terraform plan -var-file=envs/dev.tfvars
 
-# Apply
+# Apply (creates/updates DynamoDB table, IAM policies, Helm release, etc.)
 terraform apply -var-file=envs/dev.tfvars
 ```
 
@@ -94,6 +94,8 @@ If only the application config changed (not infrastructure), you can target just
 ```bash
 terraform apply -var-file=envs/dev.tfvars -target=helm_release.holmes
 ```
+
+**Note**: The DynamoDB table (`holmesgpt-dev-config`) is created by `infra/dynamodb.tf`. It stores projects and LLM instruction overrides. The table name is injected into the pod as `HOLMES_DYNAMODB_TABLE` env var.
 
 ---
 
@@ -202,9 +204,12 @@ If empty, the `npm run build` step in `Dockerfile.frontend` failed. Check Docker
 |---|---|
 | `infra/Dockerfile.frontend` | Multi-stage Docker build (React + Holmes + auth) |
 | `infra/frontend/` | React SPA source code |
-| `infra/frontend/server_frontend.py` | Auth middleware + static file serving |
+| `infra/frontend/server_frontend.py` | Auth middleware + static file serving + projects/LLM-instructions API |
 | `infra/frontend/server_with_frontend.py` | Entrypoint that wraps `server.py` |
-| `infra/helm.tf` | Helm release configuration (main app config) |
+| `infra/frontend/projects.py` | DynamoDB-backed ProjectsStore, LLMInstructionsStore, build_project_tool_executor |
+| `infra/helm.tf` | Helm release configuration (main app config, MCP servers, AWS multi-account) |
+| `infra/dynamodb.tf` | DynamoDB table `holmesgpt-dev-config` (projects + LLM overrides) |
+| `infra/iam.tf` | IRSA policies: Secrets Manager + DynamoDB + wildcard project secrets |
 | `infra/envs/dev.tfvars` | Dev environment values |
 | `infra/secrets.tf` | AWS Secrets Manager configuration |
 | `infra/eks.tf` | EKS cluster definition |

@@ -128,6 +128,28 @@ export interface UpdateLlmInstructionsResponse {
   is_overridden: boolean;
 }
 
+export interface ToolsetInstance {
+  type: string;
+  name: string;
+  secret_arn: string | null;
+  /** For MCP toolsets: override the MCP server URL (null = use global URL) */
+  mcp_url?: string | null;
+  /** For aws_api: restrict to these account profile names (null = all configured accounts) */
+  aws_accounts?: string[] | null;
+}
+
+export interface Project {
+  id: string;
+  name: string;
+  description: string;
+  instances: ToolsetInstance[];
+  created_at: string;
+}
+
+export interface ProjectsResponse {
+  projects: Project[];
+}
+
 export const api = {
   chat(data: ChatRequest): Promise<ChatResponse> {
     return request('/api/chat', {
@@ -217,6 +239,30 @@ export const api = {
     return request(`/api/integrations/${encodeURIComponent(name)}/config`, {
       method: 'PUT',
       body: JSON.stringify({ config, enabled }),
+    });
+  },
+
+  getProjects(): Promise<ProjectsResponse> {
+    return request('/api/projects');
+  },
+
+  createProject(data: { name: string; description?: string; instances?: ToolsetInstance[] }): Promise<Project> {
+    return request('/api/projects', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  updateProject(id: string, data: Partial<{ name: string; description: string; instances: ToolsetInstance[] }>): Promise<Project> {
+    return request(`/api/projects/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  deleteProject(id: string): Promise<{ ok: boolean }> {
+    return request(`/api/projects/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
     });
   },
 

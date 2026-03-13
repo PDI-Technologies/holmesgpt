@@ -1782,9 +1782,9 @@ class PrometheusToolset(Toolset):
     ] = [PrometheusConfig, AMPConfig, AzurePrometheusConfig]
     config: Optional[Union[PrometheusConfig, AMPConfig, AzurePrometheusConfig]] = None
 
-    def __init__(self):
+    def __init__(self, name: str = "prometheus/metrics"):
         super().__init__(
-            name="prometheus/metrics",
+            name=name,
             description="Prometheus integration to fetch metadata and execute PromQL queries",
             docs_url="https://holmesgpt.dev/data-sources/builtin-toolsets/prometheus/",
             icon_url="https://upload.wikimedia.org/wikipedia/commons/3/38/Prometheus_software_logo.svg",

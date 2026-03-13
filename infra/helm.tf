@@ -158,6 +158,10 @@ resource "helm_release" "holmes" {
         {
           name  = "AWS_MCP_IRSA_ROLE"
           value = var.aws_mcp_enabled ? module.aws_mcp_irsa[0].iam_role_arn : ""
+        },
+        {
+          name  = "HOLMES_DYNAMODB_TABLE"
+          value = aws_dynamodb_table.holmes_config.name
         }
       ]
 

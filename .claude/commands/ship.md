@@ -23,6 +23,8 @@ terraform apply -var-file=envs/dev.tfvars \
   -var="mcp_salesforce_api_key=${MCP_SALESFORCE_API_KEY:-}"
 ```
 
+This also creates/updates the DynamoDB table `holmesgpt-dev-config` (defined in `infra/dynamodb.tf`) which stores Projects and LLM instruction overrides. The table name is injected into the pod as `HOLMES_DYNAMODB_TABLE`.
+
 4. Verify the deployment:
 ```bash
 aws eks update-kubeconfig --name holmesgpt-dev --profile pdi-platform-dev --region us-east-1

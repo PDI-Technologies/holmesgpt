@@ -86,6 +86,36 @@ class AuthMiddleware(BaseHTTPMiddleware):
         return JSONResponse({"detail": "Unauthorized"}, status_code=401)
 
 
+def _restore_llm_overrides_from_dynamodb(config) -> None:
+    """Load persisted LLM instruction overrides from DynamoDB into the in-memory config."""
+    if config is None:
+        return
+    table_name = os.environ.get("HOLMES_DYNAMODB_TABLE", "")
+    if not table_name:
+        return
+    try:
+        from projects import get_llm_store  # noqa: PLC0415
+
+        overrides = get_llm_store().load_all()
+        for toolset_name, instructions in overrides.items():
+            # Determine whether this is an MCP server or a regular toolset
+            is_mcp = False
+            if config.mcp_servers and toolset_name in config.mcp_servers:
+                is_mcp = True
+            if is_mcp:
+                if config.mcp_servers is None:
+                    config.mcp_servers = {}
+                config.mcp_servers.setdefault(toolset_name, {})["llm_instructions"] = instructions
+            else:
+                if config.toolsets is None:
+                    config.toolsets = {}
+                config.toolsets.setdefault(toolset_name, {})["llm_instructions"] = instructions
+        if overrides:
+            logging.info("Restored %d LLM instruction override(s) from DynamoDB", len(overrides))
+    except Exception:
+        logging.warning("Failed to restore LLM overrides from DynamoDB", exc_info=True)
+
+
 def mount_frontend(app: FastAPI, config=None) -> None:
     """Add auth endpoints, integrations API, and static file serving to the FastAPI app."""
 
@@ -99,6 +129,9 @@ def mount_frontend(app: FastAPI, config=None) -> None:
         # Add auth middleware - protects ALL routes
         app.add_middleware(AuthMiddleware)
         logging.info("Auth middleware enabled - all routes require authentication")
+
+    # ── DynamoDB persistence: restore LLM instruction overrides on startup ────
+    _restore_llm_overrides_from_dynamodb(config)
 
     @app.get("/auth/check")
     async def auth_check(request: Request):
@@ -418,6 +451,12 @@ def mount_frontend(app: FastAPI, config=None) -> None:
             if config.toolsets is None:
                 config.toolsets = {}
             config.toolsets.setdefault(name, {})["llm_instructions"] = instructions
+        # Persist to DynamoDB so the override survives pod restarts
+        try:
+            from projects import get_llm_store  # noqa: PLC0415
+            get_llm_store().save(name, instructions)
+        except Exception:
+            logging.warning("Failed to persist LLM override to DynamoDB", exc_info=True)
         try:
             config._toolset_manager = None
             config._server_tool_executor = None
@@ -445,6 +484,12 @@ def mount_frontend(app: FastAPI, config=None) -> None:
         else:
             if config.toolsets and name in config.toolsets:
                 config.toolsets[name].pop("llm_instructions", None)
+        # Remove from DynamoDB so the override doesn't come back after pod restart
+        try:
+            from projects import get_llm_store  # noqa: PLC0415
+            get_llm_store().delete(name)
+        except Exception:
+            logging.warning("Failed to delete LLM override from DynamoDB", exc_info=True)
         try:
             config._toolset_manager = None
             config._server_tool_executor = None
@@ -460,6 +505,81 @@ def mount_frontend(app: FastAPI, config=None) -> None:
                     "is_overridden": False,
                 })
         return JSONResponse({"ok": True, "name": name})
+
+    # ── Projects endpoints ────────────────────────────────────────────────────
+
+    @app.get("/api/projects")
+    async def list_projects():
+        """Return all projects."""
+        try:
+            from projects import get_store  # noqa: PLC0415
+            return JSONResponse({"projects": [p.model_dump() for p in get_store().list()]})
+        except Exception as e:
+            logging.error("Failed to list projects: %s", e)
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @app.post("/api/projects")
+    async def create_project(request: Request):
+        """Create a new project."""
+        try:
+            from projects import get_store  # noqa: PLC0415
+            body = await request.json()
+            p = get_store().create(
+                name=body["name"],
+                description=body.get("description", ""),
+                instances=body.get("instances", []),
+            )
+            return JSONResponse(p.model_dump(), status_code=201)
+        except KeyError as e:
+            raise HTTPException(status_code=400, detail=f"Missing required field: {e}")
+        except Exception as e:
+            logging.error("Failed to create project: %s", e)
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @app.get("/api/projects/{project_id}")
+    async def get_project(project_id: str):
+        """Return a single project by ID."""
+        try:
+            from projects import get_store  # noqa: PLC0415
+            p = get_store().get(project_id)
+            if not p:
+                raise HTTPException(status_code=404, detail="Project not found")
+            return JSONResponse(p.model_dump())
+        except HTTPException:
+            raise
+        except Exception as e:
+            logging.error("Failed to get project %s: %s", project_id, e)
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @app.put("/api/projects/{project_id}")
+    async def update_project(project_id: str, request: Request):
+        """Update an existing project."""
+        try:
+            from projects import get_store  # noqa: PLC0415
+            body = await request.json()
+            p = get_store().update(project_id, **body)
+            if not p:
+                raise HTTPException(status_code=404, detail="Project not found")
+            return JSONResponse(p.model_dump())
+        except HTTPException:
+            raise
+        except Exception as e:
+            logging.error("Failed to update project %s: %s", project_id, e)
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @app.delete("/api/projects/{project_id}")
+    async def delete_project(project_id: str):
+        """Delete a project."""
+        try:
+            from projects import get_store  # noqa: PLC0415
+            if not get_store().delete(project_id):
+                raise HTTPException(status_code=404, detail="Project not found")
+            return JSONResponse({"ok": True})
+        except HTTPException:
+            raise
+        except Exception as e:
+            logging.error("Failed to delete project %s: %s", project_id, e)
+            raise HTTPException(status_code=500, detail=str(e))
 
     # Static file serving - must be registered last (catch-all)
     @app.get("/{path:path}")

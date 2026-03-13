@@ -4,14 +4,17 @@ import Chat from './components/Chat'
 import Investigate from './components/Investigate'
 import Integrations from './components/Integrations'
 import Settings from './components/Settings'
+import Projects from './components/Projects'
 import LoginPage from './components/LoginPage'
 import { api } from './lib/api'
+import { useProject } from './hooks/useProject'
 
-export type Page = 'chat' | 'investigate' | 'integrations' | 'settings'
+export type Page = 'chat' | 'investigate' | 'integrations' | 'settings' | 'projects'
 
 export default function App() {
   const [page, setPage] = useState<Page>('chat')
   const [authenticated, setAuthenticated] = useState<boolean | null>(null)
+  const { projects, selectedProjectId, selectedProject, selectProject, reloadProjects } = useProject()
 
   useEffect(() => {
     api.checkAuth().then(setAuthenticated)
@@ -37,11 +40,16 @@ export default function App() {
         await api.logout()
         setAuthenticated(false)
       }}
+      projects={projects}
+      selectedProjectId={selectedProjectId}
+      selectedProject={selectedProject}
+      onSelectProject={selectProject}
     >
-      {page === 'chat' && <Chat />}
+      {page === 'chat' && <Chat projectId={selectedProjectId} />}
       {page === 'investigate' && <Investigate />}
       {page === 'integrations' && <Integrations />}
       {page === 'settings' && <Settings />}
+      {page === 'projects' && <Projects projects={projects} onReload={reloadProjects} />}
     </Layout>
   )
 }

@@ -18,8 +18,12 @@ const AWS_SUGGESTIONS = [
   'Compare RDS status across logistics accounts',
 ]
 
-export default function Chat() {
-  const { messages, loading, sendMessage, clearMessages } = useChat()
+interface ChatProps {
+  projectId?: string | null
+}
+
+export default function Chat({ projectId }: ChatProps) {
+  const { messages, loading, sendMessage, clearMessages } = useChat(projectId ?? null)
   const [input, setInput] = useState('')
   const [awsAccounts, setAwsAccounts] = useState<AwsAccount[]>([])
   const [showAccountPill, setShowAccountPill] = useState(true)
