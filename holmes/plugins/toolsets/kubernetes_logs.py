@@ -1,4 +1,5 @@
 import logging
+import os
 import re
 import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -74,6 +75,9 @@ class KubernetesLogsToolset(BasePodLoggingToolset):
         enabled, disabled_reason = self.health_check()
         prerequisite.enabled = enabled
         prerequisite.disabled_reason = disabled_reason
+        self._load_llm_instructions_from_file(
+            os.path.dirname(__file__), "kubernetes_logs_instructions.jinja2"
+        )
 
     def health_check(self) -> Tuple[bool, str]:
         try:

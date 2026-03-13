@@ -82,3 +82,33 @@ data "aws_secretsmanager_secret" "datadog" {
 data "aws_secretsmanager_secret_version" "datadog" {
   secret_id = data.aws_secretsmanager_secret.datadog.id
 }
+
+# PagerDuty secret — created manually in Secrets Manager (holmesgpt-dev/pagerduty)
+# Expected keys: PAGERDUTY_API_KEY, PAGERDUTY_USER_EMAIL, PAGERDUTY_WEBHOOK_SECRET
+data "aws_secretsmanager_secret" "pagerduty" {
+  name = "${local.cluster_name}/pagerduty"
+}
+
+data "aws_secretsmanager_secret_version" "pagerduty" {
+  secret_id = data.aws_secretsmanager_secret.pagerduty.id
+}
+
+# ADO webhook secret — created manually in Secrets Manager (holmesgpt-dev/ado-webhook)
+# Expected keys: ADO_WEBHOOK_USERNAME, ADO_WEBHOOK_PASSWORD, ADO_PAT, ADO_ORGANIZATION
+data "aws_secretsmanager_secret" "ado_webhook" {
+  name = "${local.cluster_name}/ado-webhook"
+}
+
+data "aws_secretsmanager_secret_version" "ado_webhook" {
+  secret_id = data.aws_secretsmanager_secret.ado_webhook.id
+}
+
+# Salesforce webhook secret — created manually in Secrets Manager (holmesgpt-dev/salesforce-webhook)
+# Expected keys: SALESFORCE_WEBHOOK_TOKEN, SALESFORCE_INSTANCE_URL, SALESFORCE_ACCESS_TOKEN
+data "aws_secretsmanager_secret" "salesforce_webhook" {
+  name = "${local.cluster_name}/salesforce-webhook"
+}
+
+data "aws_secretsmanager_secret_version" "salesforce_webhook" {
+  secret_id = data.aws_secretsmanager_secret.salesforce_webhook.id
+}

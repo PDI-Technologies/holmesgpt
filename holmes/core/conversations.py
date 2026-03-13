@@ -100,7 +100,7 @@ def build_chat_messages(
         global_instructions=global_instructions,
         system_prompt_additions=additional_system_prompt,
         cluster_name=config.cluster_name,
-        ask_user_enabled=False,
+        ask_user_enabled=True,
         file_paths=None,
         include_todowrite_reminder=False,
         images=images,

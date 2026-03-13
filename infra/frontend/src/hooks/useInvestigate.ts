@@ -12,7 +12,7 @@ interface Investigation {
   timestamp: Date
 }
 
-export function useInvestigate() {
+export function useInvestigate(projectId?: string | null) {
   const [investigations, setInvestigations] = useState<Investigation[]>([])
   const [loading, setLoading] = useState(false)
 
@@ -33,7 +33,7 @@ export function useInvestigate() {
       setLoading(true)
 
       try {
-        const result = await api.investigate({
+        const result = await api.investigateStream({
           source,
           title,
           description,
@@ -41,6 +41,7 @@ export function useInvestigate() {
           context,
           include_tool_calls: true,
           include_tool_call_results: true,
+          project_id: projectId ?? null,
         })
 
         setInvestigations((prev) =>

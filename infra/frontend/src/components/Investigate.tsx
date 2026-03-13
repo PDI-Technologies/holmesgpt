@@ -2,12 +2,12 @@ import { useState, useEffect } from 'react'
 import { useInvestigate } from '../hooks/useInvestigate'
 import MessageBubble from './MessageBubble'
 import ToolCallCard from './ToolCallCard'
-import { api, AwsAccount } from '../lib/api'
+import { api, AwsAccount, type Project } from '../lib/api'
 
 const SOURCES = ['Manual', 'AlertManager', 'PagerDuty', 'Jira', 'OpsGenie', 'Salesforce', 'Azure DevOps', 'AWS CloudWatch']
 
-export default function Investigate() {
-  const { investigations, loading, investigate, clearInvestigations } = useInvestigate()
+export default function Investigate({ projectId, selectedProject }: { projectId?: string | null; selectedProject?: Project | null }) {
+  const { investigations, loading, investigate, clearInvestigations } = useInvestigate(projectId)
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [source, setSource] = useState('Manual')
@@ -47,14 +47,32 @@ export default function Investigate() {
           <h2 className="text-lg font-bold text-pdi-granite">Investigations</h2>
           <p className="text-xs text-pdi-slate">Submit alerts for AI-powered root cause analysis</p>
         </div>
-        {investigations.length > 0 && (
-          <button
-            onClick={clearInvestigations}
-            className="text-xs text-pdi-slate hover:text-pdi-granite px-3 py-1.5 rounded-lg border border-pdi-cool-gray hover:border-pdi-slate transition-colors"
-          >
-            Clear history
-          </button>
-        )}
+        <div className="flex items-center gap-3">
+          {/* Project scope indicator */}
+          {selectedProject ? (
+            <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-pdi-sky/10 text-pdi-indigo border border-pdi-sky/20">
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+              </svg>
+              {selectedProject.name}
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
+              </svg>
+              All instances
+            </span>
+          )}
+          {investigations.length > 0 && (
+            <button
+              onClick={clearInvestigations}
+              className="text-xs text-pdi-slate hover:text-pdi-granite px-3 py-1.5 rounded-lg border border-pdi-cool-gray hover:border-pdi-slate transition-colors"
+            >
+              Clear history
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto">

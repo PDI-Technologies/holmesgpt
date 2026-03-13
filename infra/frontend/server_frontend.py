@@ -13,8 +13,12 @@ import os
 import secrets
 from pathlib import Path
 
+import json
+import queue
+import threading
+
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 STATIC_DIR = Path("/app/static")
@@ -53,8 +57,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
     # Only these paths are exempt from auth
     EXEMPT_PATHS = ("/healthz", "/readyz", "/auth/login", "/auth/check", "/login")
-    # Static asset prefixes that must be accessible for the SPA to load
-    EXEMPT_PREFIXES = ("/assets/", "/favicon")
+    # Webhook paths are exempt — they use their own HMAC signature verification
+    EXEMPT_PREFIXES = ("/assets/", "/favicon", "/api/webhook/")
 
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
@@ -135,6 +139,107 @@ def _restore_toolset_state_from_dynamodb(config) -> None:
             logging.info("Restored %d toolset state(s) from DynamoDB", len(states))
     except Exception:
         logging.warning("Failed to restore toolset states from DynamoDB", exc_info=True)
+
+
+# ── Tool-count cap for Anthropic API ──────────────────────────────────────────
+# Anthropic's API has an internal limit on the number of tool definitions per
+# request (~256). With all integrations enabled (ADO=72, Atlassian=44,
+# Salesforce=19, plus built-ins) we reach 299 tools, which triggers an opaque
+# "internal error". This helper builds a scoped ToolExecutor that:
+#   1. Always includes toolsets relevant to the investigation source
+#   2. Always includes core toolsets (bash, runbook, internet, etc.)
+#   3. Fills remaining capacity with other toolsets up to MAX_TOOLS_PER_CALL
+MAX_TOOLS_PER_CALL = 200
+
+# Map investigation source names to toolset name prefixes that should be
+# prioritised for that source.
+_SOURCE_TOOLSET_PRIORITY: dict[str, list[str]] = {
+    "azure_devops": ["ado"],
+    "ado": ["ado"],
+    "salesforce": ["salesforce"],
+    "atlassian": ["atlassian"],
+    "jira": ["atlassian"],
+    "confluence": ["atlassian"],
+    "pagerduty": [],
+    "datadog": ["datadog"],
+    "grafana": ["grafana"],
+    "kubernetes": ["kubernetes"],
+    "aws": ["aws_api"],
+}
+
+# Toolsets that are always included regardless of source
+_CORE_TOOLSET_PREFIXES = [
+    "bash",
+    "runbook",
+    "internet",
+    "connectivity_check",
+    "core_investigation",
+]
+
+
+def _create_scoped_toolcalling_llm(config, source: str, model: str = None):
+    """
+    Build a ToolCallingLLM whose executor is capped at MAX_TOOLS_PER_CALL tools.
+
+    Toolsets are selected in priority order:
+      1. Source-specific toolsets (e.g. 'ado' for Azure DevOps investigations)
+      2. Core toolsets (bash, runbook, internet, etc.)
+      3. All remaining toolsets, added until the tool cap is reached
+    """
+    from holmes.core.tool_calling_llm import ToolCallingLLM
+    from holmes.core.tools_utils.tool_executor import ToolExecutor
+
+    # Ensure the global executor is built
+    config.create_tool_executor(config.dal)
+    all_toolsets = list(config._server_tool_executor.toolsets)
+
+    # Normalise source key
+    source_key = source.lower().replace(" ", "_").replace("-", "_")
+    priority_prefixes = _SOURCE_TOOLSET_PRIORITY.get(source_key, [])
+
+    def _toolset_tool_count(ts) -> int:
+        return len(ts.tools) if ts.tools else 0
+
+    # Bucket toolsets into three groups (preserving order within each group)
+    source_ts: list = []
+    core_ts: list = []
+    other_ts: list = []
+
+    for ts in all_toolsets:
+        name = ts.name or ""
+        if any(name == p or name.startswith(p + "/") or name.startswith(p + "_") for p in priority_prefixes):
+            source_ts.append(ts)
+        elif any(name == p or name.startswith(p + "/") or name.startswith(p + "_") for p in _CORE_TOOLSET_PREFIXES):
+            core_ts.append(ts)
+        else:
+            other_ts.append(ts)
+
+    selected: list = []
+    total_tools = 0
+
+    for ts in source_ts + core_ts + other_ts:
+        count = _toolset_tool_count(ts)
+        if total_tools + count > MAX_TOOLS_PER_CALL:
+            logging.info(
+                "Tool cap: skipping toolset '%s' (%d tools) — would exceed limit of %d (currently at %d)",
+                ts.name, count, MAX_TOOLS_PER_CALL, total_tools,
+            )
+            continue
+        selected.append(ts)
+        total_tools += count
+
+    logging.info(
+        "Scoped tool executor for source='%s': %d toolsets, %d tools (cap=%d)",
+        source, len(selected), total_tools, MAX_TOOLS_PER_CALL,
+    )
+
+    scoped_executor = ToolExecutor(selected)
+    return ToolCallingLLM(
+        scoped_executor,
+        config.max_steps,
+        config._get_llm(model),
+        tool_results_dir=None,
+    )
 
 
 def mount_frontend(app: FastAPI, config=None) -> None:
@@ -427,6 +532,63 @@ def mount_frontend(app: FastAPI, config=None) -> None:
             "irsa_role": os.environ.get("AWS_MCP_IRSA_ROLE", ""),
         })
 
+    @app.get("/api/webhooks")
+    async def get_webhooks():
+        """Return webhook configuration status (which env vars are set)."""
+        return JSONResponse({
+            "webhooks": [
+                {
+                    "id": "pagerduty",
+                    "name": "PagerDuty",
+                    "url": "/api/webhook/pagerduty",
+                    "auth_type": "HMAC-SHA256",
+                    "trigger": "incident.triggered",
+                    "configured": bool(
+                        os.environ.get("PAGERDUTY_WEBHOOK_SECRET")
+                        or os.environ.get("PAGERDUTY_API_KEY")
+                    ),
+                    "vars": {
+                        "PAGERDUTY_WEBHOOK_SECRET": bool(os.environ.get("PAGERDUTY_WEBHOOK_SECRET")),
+                        "PAGERDUTY_API_KEY": bool(os.environ.get("PAGERDUTY_API_KEY")),
+                        "PAGERDUTY_USER_EMAIL": bool(os.environ.get("PAGERDUTY_USER_EMAIL")),
+                    },
+                },
+                {
+                    "id": "ado",
+                    "name": "Azure DevOps",
+                    "url": "/api/webhook/ado",
+                    "auth_type": "Basic Auth",
+                    "trigger": "workitem.created",
+                    "configured": bool(
+                        os.environ.get("ADO_WEBHOOK_USERNAME")
+                        or os.environ.get("ADO_PAT")
+                    ),
+                    "vars": {
+                        "ADO_WEBHOOK_USERNAME": bool(os.environ.get("ADO_WEBHOOK_USERNAME")),
+                        "ADO_WEBHOOK_PASSWORD": bool(os.environ.get("ADO_WEBHOOK_PASSWORD")),
+                        "ADO_PAT": bool(os.environ.get("ADO_PAT")),
+                        "ADO_ORGANIZATION": bool(os.environ.get("ADO_ORGANIZATION")),
+                    },
+                },
+                {
+                    "id": "salesforce",
+                    "name": "Salesforce",
+                    "url": "/api/webhook/salesforce",
+                    "auth_type": "Token",
+                    "trigger": "Case created",
+                    "configured": bool(
+                        os.environ.get("SALESFORCE_WEBHOOK_TOKEN")
+                        or os.environ.get("SALESFORCE_INSTANCE_URL")
+                    ),
+                    "vars": {
+                        "SALESFORCE_WEBHOOK_TOKEN": bool(os.environ.get("SALESFORCE_WEBHOOK_TOKEN")),
+                        "SALESFORCE_INSTANCE_URL": bool(os.environ.get("SALESFORCE_INSTANCE_URL")),
+                        "SALESFORCE_ACCESS_TOKEN": bool(os.environ.get("SALESFORCE_ACCESS_TOKEN")),
+                    },
+                },
+            ]
+        })
+
     # ── LLM Instructions helpers ──────────────────────────────────────────────
 
     def _is_mcp_toolset(name: str) -> bool:
@@ -564,7 +726,7 @@ def mount_frontend(app: FastAPI, config=None) -> None:
             p = get_store().create(
                 name=body["name"],
                 description=body.get("description", ""),
-                instances=body.get("instances", []),
+                tag_filter=body.get("tag_filter"),
             )
             return JSONResponse(p.model_dump(), status_code=201)
         except KeyError as e:
@@ -617,6 +779,1043 @@ def mount_frontend(app: FastAPI, config=None) -> None:
         except Exception as e:
             logging.error("Failed to delete project %s: %s", project_id, e)
             raise HTTPException(status_code=500, detail=str(e))
+
+    @app.get("/api/projects/{project_id}/preview")
+    async def preview_project(project_id: str):
+        """Return the instances that would be resolved for a project given its tag filter."""
+        try:
+            from projects import get_store, get_instances_store, resolve_instances_for_project  # noqa: PLC0415
+            p = get_store().get(project_id)
+            if not p:
+                raise HTTPException(status_code=404, detail="Project not found")
+            all_instances = get_instances_store().list()
+            resolved = resolve_instances_for_project(p, all_instances)
+            return JSONResponse({
+                "project_id": project_id,
+                "tag_filter": p.tag_filter.model_dump() if p.tag_filter else None,
+                "resolved_instances": [i.model_dump() for i in resolved],
+                "total_instances": len(all_instances),
+                "resolved_count": len(resolved),
+            })
+        except HTTPException:
+            raise
+        except Exception as e:
+            logging.error("Failed to preview project %s: %s", project_id, e)
+            raise HTTPException(status_code=500, detail=str(e))
+
+    # ── Instances endpoints ────────────────────────────────────────────────────
+
+    @app.get("/api/instances")
+    async def list_instances():
+        """Return all instances."""
+        try:
+            from projects import get_instances_store  # noqa: PLC0415
+            return JSONResponse({"instances": [i.model_dump() for i in get_instances_store().list()]})
+        except Exception as e:
+            logging.error("Failed to list instances: %s", e)
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @app.post("/api/instances")
+    async def create_instance(request: Request):
+        """Create a new instance."""
+        try:
+            from projects import get_instances_store  # noqa: PLC0415
+            body = await request.json()
+            inst = get_instances_store().create(
+                type=body["type"],
+                name=body["name"],
+                tags=body.get("tags", {}),
+                secret_arn=body.get("secret_arn"),
+                mcp_url=body.get("mcp_url"),
+                aws_accounts=body.get("aws_accounts"),
+            )
+            return JSONResponse(inst.model_dump(), status_code=201)
+        except KeyError as e:
+            raise HTTPException(status_code=400, detail=f"Missing required field: {e}")
+        except Exception as e:
+            logging.error("Failed to create instance: %s", e)
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @app.get("/api/instances/{instance_id}")
+    async def get_instance(instance_id: str):
+        """Return a single instance by ID."""
+        try:
+            from projects import get_instances_store  # noqa: PLC0415
+            inst = get_instances_store().get(instance_id)
+            if not inst:
+                raise HTTPException(status_code=404, detail="Instance not found")
+            return JSONResponse(inst.model_dump())
+        except HTTPException:
+            raise
+        except Exception as e:
+            logging.error("Failed to get instance %s: %s", instance_id, e)
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @app.put("/api/instances/{instance_id}")
+    async def update_instance(instance_id: str, request: Request):
+        """Update an existing instance."""
+        try:
+            from projects import get_instances_store  # noqa: PLC0415
+            body = await request.json()
+            inst = get_instances_store().update(instance_id, **body)
+            if not inst:
+                raise HTTPException(status_code=404, detail="Instance not found")
+            return JSONResponse(inst.model_dump())
+        except HTTPException:
+            raise
+        except Exception as e:
+            logging.error("Failed to update instance %s: %s", instance_id, e)
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @app.delete("/api/instances/{instance_id}")
+    async def delete_instance(instance_id: str):
+        """Delete an instance."""
+        try:
+            from projects import get_instances_store  # noqa: PLC0415
+            if not get_instances_store().delete(instance_id):
+                raise HTTPException(status_code=404, detail="Instance not found")
+            return JSONResponse({"ok": True})
+        except HTTPException:
+            raise
+        except Exception as e:
+            logging.error("Failed to delete instance %s: %s", instance_id, e)
+            raise HTTPException(status_code=500, detail=str(e))
+
+    # ── Investigation history endpoints ────────────────────────────────────────
+
+    @app.get("/api/investigations")
+    async def list_investigations(
+        limit: int = 50,
+        source: str = None,
+        project_id: str = None,
+    ):
+        """List past investigations, newest first.
+
+        tool_output is stripped from each tool call record to keep the response
+        payload small (full tool outputs can be hundreds of KB per investigation).
+        The detail endpoint GET /api/investigations/{id} returns the full record.
+        """
+        try:
+            from projects import get_investigation_store  # noqa: PLC0415
+            investigations = get_investigation_store().list(
+                limit=limit,
+                source=source or None,
+                project_id=project_id or None,
+            )
+            rows = []
+            for inv in investigations:
+                d = inv.model_dump()
+                # Strip tool_output to keep list payload small; detail endpoint has full data
+                for tc in d.get("tool_calls", []):
+                    tc["tool_output"] = ""
+                rows.append(d)
+            return JSONResponse(rows)
+        except Exception as e:
+            logging.error("Failed to list investigations: %s", e)
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @app.get("/api/investigations/{investigation_id}")
+    async def get_investigation(investigation_id: str):
+        """Get a single investigation by ID."""
+        try:
+            from projects import get_investigation_store  # noqa: PLC0415
+            inv = get_investigation_store().get(investigation_id)
+            if not inv:
+                raise HTTPException(status_code=404, detail="Investigation not found")
+            return JSONResponse(inv.model_dump())
+        except HTTPException:
+            raise
+        except Exception as e:
+            logging.error("Failed to get investigation %s: %s", investigation_id, e)
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @app.delete("/api/investigations/{investigation_id}")
+    async def delete_investigation(investigation_id: str):
+        """Delete an investigation record."""
+        try:
+            from projects import get_investigation_store  # noqa: PLC0415
+            if not get_investigation_store().delete(investigation_id):
+                raise HTTPException(status_code=404, detail="Investigation not found")
+            return JSONResponse({"ok": True})
+        except HTTPException:
+            raise
+        except Exception as e:
+            logging.error("Failed to delete investigation %s: %s", investigation_id, e)
+            raise HTTPException(status_code=500, detail=str(e))
+
+    # ── Manual investigate endpoint ───────────────────────────────────────────
+
+    @app.post("/api/investigate")
+    async def manual_investigate(request: Request):
+        """
+        Run a Holmes investigation from the UI Investigate page.
+        Accepts: { source, title, description, subject, context, include_tool_calls, include_tool_call_results }
+
+        Returns an SSE stream to keep the ALB connection alive during long investigations
+        (ADO/Salesforce searches can exceed the 300s ALB idle timeout).
+
+        SSE protocol:
+          - ': keep-alive\\n\\n'  — heartbeat comment every 25s (resets ALB idle timer)
+          - 'data: <json>\\n\\n'  — final result (same shape as the old JSON response)
+          - 'data: {"error": "..."}\\n\\n' — on failure
+        """
+        import uuid as _uuid
+        from datetime import datetime, timezone
+
+        body = await request.json()
+        source = body.get("source", "Manual")
+        title = body.get("title", "")
+        description = body.get("description", "")
+        context = body.get("context", {})
+        include_tool_calls = body.get("include_tool_calls", True)
+        include_tool_call_results = body.get("include_tool_call_results", True)
+        project_id = body.get("project_id", "")
+
+        if not title or not description:
+            raise HTTPException(status_code=400, detail="title and description are required")
+
+        if config is None:
+            raise HTTPException(status_code=503, detail="Holmes config not available")
+
+        # Resolve project if project_id provided
+        resolved_project = None
+        if project_id:
+            try:
+                import sys as _sys_proj
+                _frontend_dir_proj = os.path.join(os.path.dirname(__file__))
+                if _frontend_dir_proj not in _sys_proj.path:
+                    _sys_proj.path.insert(0, _frontend_dir_proj)
+                from projects import get_store as _get_store, get_instances_store as _get_instances_store  # noqa: PLC0415
+                resolved_project = _get_store().get(project_id)
+            except Exception as e:
+                logging.warning("Failed to resolve project %s: %s", project_id, e)
+
+        investigation_id = _uuid.uuid4().hex
+        started_at = datetime.now(timezone.utc).isoformat()
+
+        # Build a rich cross-system investigation prompt.
+        # Explicitly instruct Holmes to use ALL available integrations so it
+        # doesn't limit itself to the source system named in the title.
+        context_lines = "\n".join(f"  {k}: {v}" for k, v in context.items() if v)
+        question = (
+            f"## Investigation Request\n\n"
+            f"**Source:** {source}\n"
+            f"**Title:** {title}\n\n"
+            f"**Description:**\n{description}\n"
+        )
+        if context_lines:
+            question += f"\n**Additional Context:**\n{context_lines}\n"
+
+        question += (
+            "\n## Instructions\n\n"
+            "Please conduct a thorough cross-system investigation using ALL available integrations and tools. "
+            "Do not limit the investigation to the source system mentioned above. Work through each system below:\n\n"
+            "1. **Salesforce** — look up the case, any linked change requests, customer records, and case history\n"
+            "2. **Azure DevOps (ADO)** — search for related work items AND search code repos for relevant changes:\n"
+            "   - Use `search_workitem` to find linked bugs, features, or SWAT cases\n"
+            "   - Use `search_code` to find code related to the issue (search by feature name, error message, or component)\n"
+            "   - Use `repo_search_commits` or `repo_list_pull_requests_by_repo` to find recent changes in affected areas\n"
+            "   - Use `pipelines_get_builds` to check if recent deployments may have introduced the issue\n"
+            "3. **Datadog** — check multiple signal types, not just logs:\n"
+            "   - Use `fetch_datadog_logs` to search for errors or warnings\n"
+            "   - Use `list_active_datadog_metrics` and `query_datadog_metrics` to check for anomalies\n"
+            "   - Use `fetch_datadog_spans` to look for APM traces showing slow or failing requests\n"
+            "   - Use `datadog_api_get` to check monitors or dashboards if logs/metrics are empty\n"
+            "4. **Confluence** — search for runbooks, known issues, architecture docs, or past incident reports\n"
+            "5. **Grafana** — check dashboards and alerts for any correlated infrastructure signals\n"
+            "6. **Any other available tools** — use all tools at your disposal\n\n"
+            "Important: if a tool returns empty results, try alternative queries or related tools before moving on. "
+            "Consolidate findings from all systems into a single comprehensive analysis. "
+            "Identify root causes, correlations across systems, and provide clear recommended actions."
+        )
+
+        # Result container shared between the worker thread and the SSE generator
+        result_q: queue.Queue = queue.Queue()
+
+        def _run_investigation():
+            """Execute the blocking LLM investigation in a background thread."""
+            answer = ""
+            tool_calls_data: list = []
+            status = "completed"
+            error_msg = ""
+
+            try:
+                if resolved_project is not None:
+                    import sys as _sys_inv
+                    _frontend_dir_inv = os.path.join(os.path.dirname(__file__))
+                    if _frontend_dir_inv not in _sys_inv.path:
+                        _sys_inv.path.insert(0, _frontend_dir_inv)
+                    from projects import get_instances_store as _get_instances_store_inv, build_project_tool_executor  # noqa: PLC0415
+                    ai = build_project_tool_executor(resolved_project, config, config.dal, _get_instances_store_inv())
+                else:
+                    ai = _create_scoped_toolcalling_llm(config, source)
+                global_instructions = config.dal.get_global_instructions_for_account()
+
+                from holmes.core.conversations import build_chat_messages  # noqa: PLC0415
+                messages = build_chat_messages(
+                    question,
+                    conversation_history=None,
+                    ai=ai,
+                    config=config,
+                    global_instructions=global_instructions,
+                )
+
+                llm_call = ai.messages_call(messages=messages)
+                answer = llm_call.result
+
+                for tc in (llm_call.tool_calls or []):
+                    try:
+                        result_obj = getattr(tc, "result", None)
+                        if result_obj is not None and hasattr(result_obj, "get_stringified_data"):
+                            tool_output = result_obj.get_stringified_data() or ""
+                        else:
+                            tool_output = str(result_obj) if result_obj is not None else ""
+                    except Exception:
+                        tool_output = ""
+                    tool_calls_data.append({
+                        "tool_name": getattr(tc, "tool_name", str(tc)),
+                        "description": getattr(tc, "description", ""),
+                        "result": tool_output if include_tool_call_results else "",
+                        "tool_input": {},
+                        "tool_output": tool_output,
+                        "called_at": datetime.now(timezone.utc).isoformat(),
+                    })
+
+            except Exception as exc:
+                status = "failed"
+                error_msg = str(exc)
+                logging.error("Manual investigate: investigation failed: %s", exc, exc_info=True)
+
+            # Persist to investigation store
+            try:
+                import sys as _sys
+                _frontend_dir = os.path.join(os.path.dirname(__file__))
+                if _frontend_dir not in _sys.path:
+                    _sys.path.insert(0, _frontend_dir)
+                from projects import get_investigation_store, Investigation, ToolCallRecord  # noqa: PLC0415
+                inv = Investigation(
+                    id=investigation_id,
+                    started_at=started_at,
+                    finished_at=datetime.now(timezone.utc).isoformat(),
+                    trigger="manual",
+                    source=source.lower().replace(" ", "_"),
+                    source_id="",
+                    source_url="",
+                    question=question,
+                    answer=answer,
+                    tool_calls=[
+                        ToolCallRecord(**{k: v for k, v in tc.items() if k in ("tool_name", "tool_input", "tool_output", "called_at")})
+                        for tc in tool_calls_data
+                    ],
+                    project_id=project_id or "",
+                    status=status,
+                    error=error_msg,
+                )
+                get_investigation_store().save(inv)
+            except Exception:
+                logging.warning("Manual investigate: failed to persist investigation", exc_info=True)
+
+            result_q.put({"answer": answer, "tool_calls_data": tool_calls_data, "status": status, "error_msg": error_msg})
+
+        # Start the investigation in a background thread
+        worker = threading.Thread(target=_run_investigation, daemon=True)
+        worker.start()
+
+        def _sse_generator():
+            """
+            Yield SSE keepalive comments every 25s until the investigation finishes,
+            then emit the final result as a data event.
+
+            The ALB idle timeout is 300s. Keepalives every 25s ensure the connection
+            is never idle long enough for the ALB to close it.
+            """
+            _KEEPALIVE_INTERVAL = 25  # seconds between heartbeats
+
+            while True:
+                try:
+                    outcome = result_q.get(timeout=_KEEPALIVE_INTERVAL)
+                    break
+                except queue.Empty:
+                    # Investigation still running — send a heartbeat to reset ALB idle timer
+                    yield ": keep-alive\n\n"
+
+            # Emit the final result
+            answer = outcome["answer"]
+            tool_calls_data = outcome["tool_calls_data"]
+            status = outcome["status"]
+            error_msg = outcome["error_msg"]
+
+            if status == "failed":
+                payload = json.dumps({"error": error_msg})
+            else:
+                response_tool_calls = []
+                if include_tool_calls:
+                    response_tool_calls = [
+                        {
+                            "tool_name": tc["tool_name"],
+                            "description": tc.get("description", ""),
+                            "result": tc.get("result", ""),
+                        }
+                        for tc in tool_calls_data
+                    ]
+                payload = json.dumps({"analysis": answer, "tool_calls": response_tool_calls})
+
+            yield f"data: {payload}\n\n"
+
+        return StreamingResponse(
+            _sse_generator(),
+            media_type="text/event-stream",
+            headers={
+                # Disable proxy/nginx buffering so keepalives reach the client immediately
+                "X-Accel-Buffering": "no",
+                "Cache-Control": "no-cache",
+            },
+        )
+
+    # ── Webhook endpoints ─────────────────────────────────────────────────────
+    # These are NOT protected by session auth — they use their own HMAC verification.
+    # The /api/webhook/ prefix is in EXEMPT_PREFIXES above.
+
+    @app.post("/api/webhook/pagerduty")
+    async def pagerduty_webhook(request: Request):
+        """
+        Receive PagerDuty v3 webhook events, run a Holmes investigation for
+        incident.triggered events, and write the answer back as a PD note.
+
+        Required env vars:
+          PAGERDUTY_API_KEY        — PD REST API token (used for write-back)
+          PAGERDUTY_USER_EMAIL     — From: header required by PD API
+          PAGERDUTY_WEBHOOK_SECRET — Shared secret for HMAC-SHA256 verification
+                                     (leave empty to skip verification in dev)
+        """
+        import hashlib as _hashlib
+        import hmac as _hmac
+        import threading as _threading
+        import uuid as _uuid
+        from datetime import datetime, timezone
+
+        # ── 1. Read raw body (needed for HMAC verification) ──────────────────
+        raw_body = await request.body()
+
+        # ── 2. Verify HMAC-SHA256 signature ──────────────────────────────────
+        webhook_secret = os.environ.get("PAGERDUTY_WEBHOOK_SECRET", "")
+        if webhook_secret:
+            sig_header = request.headers.get("x-pagerduty-signature", "")
+            # PD sends "v1=<hex>,v1=<hex>" (may have multiple signatures)
+            expected_sig = _hmac.new(
+                webhook_secret.encode(),
+                raw_body,
+                _hashlib.sha256,
+            ).hexdigest()
+            # Check if any of the provided signatures match
+            provided_sigs = [
+                part.split("=", 1)[1]
+                for part in sig_header.split(",")
+                if part.startswith("v1=")
+            ]
+            if not any(
+                _hmac.compare_digest(expected_sig, sig) for sig in provided_sigs
+            ):
+                logging.warning("PagerDuty webhook: invalid HMAC signature")
+                raise HTTPException(status_code=401, detail="Invalid signature")
+
+        # ── 3. Parse payload ──────────────────────────────────────────────────
+        try:
+            payload = await request.json()
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid JSON payload")
+
+        # PD v3 webhook wraps events in a list
+        events = payload if isinstance(payload, list) else [payload]
+
+        for event in events:
+            event_type = event.get("event_type") or (event.get("event") or {}).get("event_type", "")
+            # Only act on new incidents
+            if event_type not in ("incident.triggered", "incident.trigger"):
+                continue
+
+            # Extract incident data — v3 structure: event.data
+            data = event.get("data") or event.get("event", {}).get("data", {})
+            incident_id = data.get("id", "")
+            incident_title = data.get("title", "") or data.get("summary", "")
+            incident_url = data.get("self", "") or data.get("html_url", "")
+            incident_body = (data.get("body") or {}).get("details", "")
+
+            if not incident_id:
+                logging.warning("PagerDuty webhook: missing incident id in payload")
+                continue
+
+            logging.info(
+                "PagerDuty webhook: queuing investigation for incident %s — %s",
+                incident_id, incident_title,
+            )
+
+            # ── 4. Run investigation in background thread ─────────────────────
+            def _run_investigation(
+                inc_id=incident_id,
+                inc_title=incident_title,
+                inc_url=incident_url,
+                inc_body=incident_body,
+            ):
+                investigation_id = _uuid.uuid4().hex
+                started_at = datetime.now(timezone.utc).isoformat()
+                question = (
+                    f"PagerDuty incident triggered: {inc_title}\n\n"
+                    + (f"Details: {inc_body}\n\n" if inc_body else "")
+                    + "Please investigate this incident and provide a root cause analysis "
+                    "with recommended remediation steps."
+                )
+                answer = ""
+                tool_calls_data: list = []
+                status = "completed"
+                error_msg = ""
+
+                try:
+                    if config is None:
+                        logging.error("PagerDuty webhook: config not available")
+                        return
+
+                    ai = config.create_toolcalling_llm(dal=config.dal)
+                    global_instructions = config.dal.get_global_instructions_for_account()
+
+                    from holmes.core.conversations import build_chat_messages  # noqa: PLC0415
+                    messages = build_chat_messages(
+                        question,
+                        conversation_history=None,
+                        ai=ai,
+                        config=config,
+                        global_instructions=global_instructions,
+                    )
+
+                    llm_call = ai.messages_call(messages=messages)
+                    answer = llm_call.result
+
+                    # Collect tool call records
+                    for tc in (llm_call.tool_calls or []):
+                        try:
+                            result_obj = getattr(tc, "result", None)
+                            if result_obj is not None and hasattr(result_obj, "get_stringified_data"):
+                                tool_output = result_obj.get_stringified_data() or ""
+                            else:
+                                tool_output = str(result_obj) if result_obj is not None else ""
+                        except Exception:
+                            tool_output = ""
+                        tool_calls_data.append({
+                            "tool_name": getattr(tc, "tool_name", str(tc)),
+                            "tool_input": {},
+                            "tool_output": tool_output,
+                            "called_at": datetime.now(timezone.utc).isoformat(),
+                        })
+
+                except Exception as exc:
+                    status = "failed"
+                    error_msg = str(exc)
+                    logging.error(
+                        "PagerDuty webhook: investigation failed for incident %s: %s",
+                        inc_id, exc, exc_info=True,
+                    )
+
+                # ── 5. Persist investigation ──────────────────────────────────
+                try:
+                    import sys as _sys
+                    _frontend_dir = os.path.join(os.path.dirname(__file__))
+                    if _frontend_dir not in _sys.path:
+                        _sys.path.insert(0, _frontend_dir)
+                    from projects import get_investigation_store, Investigation, ToolCallRecord  # noqa: PLC0415
+                    inv = Investigation(
+                        id=investigation_id,
+                        started_at=started_at,
+                        finished_at=datetime.now(timezone.utc).isoformat(),
+                        trigger="webhook",
+                        source="pagerduty",
+                        source_id=inc_id,
+                        source_url=inc_url,
+                        question=question,
+                        answer=answer,
+                        tool_calls=[ToolCallRecord(**tc) for tc in tool_calls_data],
+                        project_id="",
+                        status=status,
+                        error=error_msg,
+                    )
+                    get_investigation_store().save(inv)
+                    logging.info(
+                        "PagerDuty webhook: saved investigation %s for incident %s",
+                        investigation_id, inc_id,
+                    )
+                except Exception:
+                    logging.warning(
+                        "PagerDuty webhook: failed to persist investigation", exc_info=True
+                    )
+
+                # ── 6. Write answer back to PagerDuty incident ────────────────
+                if answer and status == "completed":
+                    try:
+                        pd_api_key = os.environ.get("PAGERDUTY_API_KEY", "")
+                        pd_user_email = os.environ.get("PAGERDUTY_USER_EMAIL", "")
+                        if pd_api_key and pd_user_email:
+                            import requests as _requests  # noqa: PLC0415
+                            note_body = f"**HolmesGPT Investigation**\n\n{answer}"
+                            resp = _requests.post(
+                                f"https://api.pagerduty.com/incidents/{inc_id}/notes",
+                                headers={
+                                    "Authorization": f"Token token={pd_api_key}",
+                                    "From": pd_user_email,
+                                    "Content-Type": "application/json",
+                                    "Accept": "application/vnd.pagerduty+json;version=2",
+                                },
+                                json={"note": {"content": note_body}},
+                                timeout=15,
+                            )
+                            if resp.ok:
+                                logging.info(
+                                    "PagerDuty webhook: wrote note to incident %s", inc_id
+                                )
+                            else:
+                                logging.warning(
+                                    "PagerDuty webhook: note write-back failed %s: %s",
+                                    resp.status_code, resp.text,
+                                )
+                        else:
+                            logging.info(
+                                "PagerDuty webhook: PAGERDUTY_API_KEY or PAGERDUTY_USER_EMAIL "
+                                "not set — skipping write-back for incident %s", inc_id
+                            )
+                    except Exception:
+                        logging.warning(
+                            "PagerDuty webhook: write-back exception for incident %s",
+                            inc_id, exc_info=True,
+                        )
+
+            _threading.Thread(target=_run_investigation, daemon=True).start()
+
+        return JSONResponse({"ok": True})
+
+    @app.post("/api/webhook/ado")
+    async def ado_webhook(request: Request):
+        """
+        Receive Azure DevOps service hook events, run a Holmes investigation for
+        workitem.created events, and add a comment to the work item.
+
+        Required env vars:
+          ADO_WEBHOOK_USERNAME  — Basic-auth username configured in the ADO service hook
+          ADO_WEBHOOK_PASSWORD  — Basic-auth password configured in the ADO service hook
+          ADO_PAT               — Personal Access Token for writing comments back to ADO
+          ADO_ORGANIZATION      — ADO organization name (e.g. "pditechnologies")
+        """
+        import base64 as _base64
+        import threading as _threading
+        import uuid as _uuid
+        from datetime import datetime, timezone
+
+        # ── 1. Basic-auth verification ────────────────────────────────────────
+        ado_username = os.environ.get("ADO_WEBHOOK_USERNAME", "")
+        ado_password = os.environ.get("ADO_WEBHOOK_PASSWORD", "")
+        if ado_username or ado_password:
+            auth_header = request.headers.get("authorization", "")
+            if auth_header.startswith("Basic "):
+                try:
+                    decoded = _base64.b64decode(auth_header[6:]).decode()
+                    provided_user, _, provided_pass = decoded.partition(":")
+                except Exception:
+                    provided_user = provided_pass = ""
+                valid_user = hmac.compare_digest(provided_user, ado_username) if ado_username else True
+                valid_pass = hmac.compare_digest(provided_pass, ado_password) if ado_password else True
+                if not (valid_user and valid_pass):
+                    logging.warning("ADO webhook: invalid Basic-auth credentials")
+                    raise HTTPException(status_code=401, detail="Invalid credentials")
+            else:
+                logging.warning("ADO webhook: missing Basic-auth header")
+                raise HTTPException(status_code=401, detail="Missing credentials")
+
+        # ── 2. Parse payload ──────────────────────────────────────────────────
+        try:
+            payload = await request.json()
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid JSON payload")
+
+        event_type = payload.get("eventType", "")
+        if event_type not in ("workitem.created", "workitem.updated"):
+            return JSONResponse({"ok": True, "skipped": True})
+
+        resource = payload.get("resource") or {}
+        fields = resource.get("fields") or {}
+        work_item_id = str(resource.get("id", ""))
+        work_item_title = (
+            (fields.get("System.Title") or {}).get("newValue", "")
+            or fields.get("System.Title", "")
+            or resource.get("url", "")
+        )
+        work_item_type = (
+            (fields.get("System.WorkItemType") or {}).get("newValue", "")
+            or fields.get("System.WorkItemType", "")
+        )
+        work_item_url = resource.get("url", "") or resource.get("_links", {}).get("html", {}).get("href", "")
+        work_item_description = (
+            (fields.get("System.Description") or {}).get("newValue", "")
+            or fields.get("System.Description", "")
+        )
+
+        if not work_item_id:
+            logging.warning("ADO webhook: missing work item id in payload")
+            return JSONResponse({"ok": True})
+
+        logging.info(
+            "ADO webhook: queuing investigation for work item %s — %s",
+            work_item_id, work_item_title,
+        )
+
+        # ── 3. Run investigation in background thread ─────────────────────────
+        def _run_ado_investigation(
+            wi_id=work_item_id,
+            wi_title=work_item_title,
+            wi_type=work_item_type,
+            wi_url=work_item_url,
+            wi_description=work_item_description,
+        ):
+            investigation_id = _uuid.uuid4().hex
+            started_at = datetime.now(timezone.utc).isoformat()
+            question = (
+                f"Azure DevOps work item created: [{wi_type}] {wi_title}\n\n"
+                + (f"Description: {wi_description}\n\n" if wi_description else "")
+                + "Please investigate this work item and provide relevant context, "
+                "potential impact analysis, and recommended next steps."
+            )
+            answer = ""
+            tool_calls_data: list = []
+            status = "completed"
+            error_msg = ""
+
+            try:
+                if config is None:
+                    logging.error("ADO webhook: config not available")
+                    return
+
+                ai = config.create_toolcalling_llm(dal=config.dal)
+                global_instructions = config.dal.get_global_instructions_for_account()
+
+                from holmes.core.conversations import build_chat_messages  # noqa: PLC0415
+                messages = build_chat_messages(
+                    question,
+                    conversation_history=None,
+                    ai=ai,
+                    config=config,
+                    global_instructions=global_instructions,
+                )
+
+                llm_call = ai.messages_call(messages=messages)
+                answer = llm_call.result
+
+                for tc in (llm_call.tool_calls or []):
+                    try:
+                        result_obj = getattr(tc, "result", None)
+                        if result_obj is not None and hasattr(result_obj, "get_stringified_data"):
+                            tool_output = result_obj.get_stringified_data() or ""
+                        else:
+                            tool_output = str(result_obj) if result_obj is not None else ""
+                    except Exception:
+                        tool_output = ""
+                    tool_calls_data.append({
+                        "tool_name": getattr(tc, "tool_name", str(tc)),
+                        "tool_input": {},
+                        "tool_output": tool_output,
+                        "called_at": datetime.now(timezone.utc).isoformat(),
+                    })
+
+            except Exception as exc:
+                status = "failed"
+                error_msg = str(exc)
+                logging.error(
+                    "ADO webhook: investigation failed for work item %s: %s",
+                    wi_id, exc, exc_info=True,
+                )
+
+            # ── 4. Persist investigation ──────────────────────────────────────
+            try:
+                import sys as _sys
+                _frontend_dir = os.path.join(os.path.dirname(__file__))
+                if _frontend_dir not in _sys.path:
+                    _sys.path.insert(0, _frontend_dir)
+                from projects import get_investigation_store, Investigation, ToolCallRecord  # noqa: PLC0415
+                inv = Investigation(
+                    id=investigation_id,
+                    started_at=started_at,
+                    finished_at=datetime.now(timezone.utc).isoformat(),
+                    trigger="webhook",
+                    source="ado",
+                    source_id=wi_id,
+                    source_url=wi_url,
+                    question=question,
+                    answer=answer,
+                    tool_calls=[ToolCallRecord(**tc) for tc in tool_calls_data],
+                    project_id="",
+                    status=status,
+                    error=error_msg,
+                )
+                get_investigation_store().save(inv)
+                logging.info(
+                    "ADO webhook: saved investigation %s for work item %s",
+                    investigation_id, wi_id,
+                )
+            except Exception:
+                logging.warning(
+                    "ADO webhook: failed to persist investigation", exc_info=True
+                )
+
+            # ── 5. Write answer back to ADO work item as a comment ────────────
+            if answer and status == "completed":
+                try:
+                    ado_pat = os.environ.get("ADO_PAT", "")
+                    ado_org = os.environ.get("ADO_ORGANIZATION", "")
+                    if ado_pat and ado_org and wi_id:
+                        import requests as _requests  # noqa: PLC0415
+                        comment_html = f"<b>HolmesGPT Investigation</b><br><br>{answer.replace(chr(10), '<br>')}"
+                        token_b64 = _base64.b64encode(f":{ado_pat}".encode()).decode()
+                        resp = _requests.post(
+                            f"https://dev.azure.com/{ado_org}/_apis/wit/workItems/{wi_id}/comments?api-version=7.1-preview.3",
+                            headers={
+                                "Authorization": f"Basic {token_b64}",
+                                "Content-Type": "application/json",
+                            },
+                            json={"text": comment_html},
+                            timeout=15,
+                        )
+                        if resp.ok:
+                            logging.info(
+                                "ADO webhook: wrote comment to work item %s", wi_id
+                            )
+                        else:
+                            logging.warning(
+                                "ADO webhook: comment write-back failed %s: %s",
+                                resp.status_code, resp.text,
+                            )
+                    else:
+                        logging.info(
+                            "ADO webhook: ADO_PAT or ADO_ORGANIZATION not set — "
+                            "skipping write-back for work item %s", wi_id
+                        )
+                except Exception:
+                    logging.warning(
+                        "ADO webhook: write-back exception for work item %s",
+                        wi_id, exc_info=True,
+                    )
+
+        _threading.Thread(target=_run_ado_investigation, daemon=True).start()
+
+        return JSONResponse({"ok": True})
+
+    @app.post("/api/webhook/salesforce")
+    async def salesforce_webhook(request: Request):
+        """
+        Receive Salesforce outbound message / webhook events for Case created,
+        run a Holmes investigation, and add a comment to the Case.
+
+        Salesforce outbound messages use SOAP; this endpoint also accepts a
+        simpler JSON format from Salesforce Flow HTTP callouts.
+
+        Required env vars:
+          SALESFORCE_WEBHOOK_TOKEN  — Shared token sent in X-Salesforce-Token header
+          SALESFORCE_INSTANCE_URL   — e.g. https://myorg.my.salesforce.com
+          SALESFORCE_ACCESS_TOKEN   — OAuth access token for writing comments back
+        """
+        import threading as _threading
+        import uuid as _uuid
+        from datetime import datetime, timezone
+
+        # ── 1. Token verification ─────────────────────────────────────────────
+        sf_token = os.environ.get("SALESFORCE_WEBHOOK_TOKEN", "")
+        if sf_token:
+            provided = request.headers.get("x-salesforce-token", "")
+            if not provided or not hmac.compare_digest(provided, sf_token):
+                logging.warning("Salesforce webhook: invalid token")
+                raise HTTPException(status_code=401, detail="Invalid token")
+
+        # ── 2. Parse payload ──────────────────────────────────────────────────
+        content_type = request.headers.get("content-type", "")
+        raw_body = await request.body()
+
+        case_id = ""
+        case_number = ""
+        case_subject = ""
+        case_description = ""
+        case_url = ""
+
+        if "xml" in content_type or raw_body.lstrip().startswith(b"<"):
+            # SOAP outbound message — extract fields with basic string parsing
+            body_str = raw_body.decode(errors="replace")
+            import re as _re  # noqa: PLC0415
+            def _soap_field(tag: str) -> str:
+                m = _re.search(rf"<(?:\w+:)?{tag}[^>]*>(.*?)</(?:\w+:)?{tag}>", body_str, _re.DOTALL)
+                return m.group(1).strip() if m else ""
+            case_id = _soap_field("Id") or _soap_field("CaseId")
+            case_number = _soap_field("CaseNumber")
+            case_subject = _soap_field("Subject")
+            case_description = _soap_field("Description")
+            sf_instance = os.environ.get("SALESFORCE_INSTANCE_URL", "").rstrip("/")
+            case_url = f"{sf_instance}/{case_id}" if sf_instance and case_id else ""
+        else:
+            # JSON payload (Flow HTTP callout or custom webhook)
+            try:
+                payload = await request.json()
+            except Exception:
+                raise HTTPException(status_code=400, detail="Invalid payload")
+            case_id = payload.get("Id") or payload.get("id") or payload.get("CaseId", "")
+            case_number = payload.get("CaseNumber") or payload.get("case_number", "")
+            case_subject = payload.get("Subject") or payload.get("subject", "")
+            case_description = payload.get("Description") or payload.get("description", "")
+            sf_instance = os.environ.get("SALESFORCE_INSTANCE_URL", "").rstrip("/")
+            case_url = payload.get("url") or (f"{sf_instance}/{case_id}" if sf_instance and case_id else "")
+
+        if not case_id:
+            logging.warning("Salesforce webhook: missing case id in payload")
+            return JSONResponse({"ok": True})
+
+        logging.info(
+            "Salesforce webhook: queuing investigation for case %s — %s",
+            case_number or case_id, case_subject,
+        )
+
+        # ── 3. Run investigation in background thread ─────────────────────────
+        def _run_sf_investigation(
+            c_id=case_id,
+            c_number=case_number,
+            c_subject=case_subject,
+            c_description=case_description,
+            c_url=case_url,
+        ):
+            investigation_id = _uuid.uuid4().hex
+            started_at = datetime.now(timezone.utc).isoformat()
+            display_id = f"Case {c_number}" if c_number else f"Case ID {c_id}"
+            question = (
+                f"Salesforce case created: {display_id} — {c_subject}\n\n"
+                + (f"Description: {c_description}\n\n" if c_description else "")
+                + "Please investigate this support case and provide relevant context, "
+                "potential root cause, and recommended resolution steps."
+            )
+            answer = ""
+            tool_calls_data: list = []
+            status = "completed"
+            error_msg = ""
+
+            try:
+                if config is None:
+                    logging.error("Salesforce webhook: config not available")
+                    return
+
+                ai = config.create_toolcalling_llm(dal=config.dal)
+                global_instructions = config.dal.get_global_instructions_for_account()
+
+                from holmes.core.conversations import build_chat_messages  # noqa: PLC0415
+                messages = build_chat_messages(
+                    question,
+                    conversation_history=None,
+                    ai=ai,
+                    config=config,
+                    global_instructions=global_instructions,
+                )
+
+                llm_call = ai.messages_call(messages=messages)
+                answer = llm_call.result
+
+                for tc in (llm_call.tool_calls or []):
+                    try:
+                        result_obj = getattr(tc, "result", None)
+                        if result_obj is not None and hasattr(result_obj, "get_stringified_data"):
+                            tool_output = result_obj.get_stringified_data() or ""
+                        else:
+                            tool_output = str(result_obj) if result_obj is not None else ""
+                    except Exception:
+                        tool_output = ""
+                    tool_calls_data.append({
+                        "tool_name": getattr(tc, "tool_name", str(tc)),
+                        "tool_input": {},
+                        "tool_output": tool_output,
+                        "called_at": datetime.now(timezone.utc).isoformat(),
+                    })
+
+            except Exception as exc:
+                status = "failed"
+                error_msg = str(exc)
+                logging.error(
+                    "Salesforce webhook: investigation failed for case %s: %s",
+                    c_id, exc, exc_info=True,
+                )
+
+            # ── 4. Persist investigation ──────────────────────────────────────
+            try:
+                import sys as _sys
+                _frontend_dir = os.path.join(os.path.dirname(__file__))
+                if _frontend_dir not in _sys.path:
+                    _sys.path.insert(0, _frontend_dir)
+                from projects import get_investigation_store, Investigation, ToolCallRecord  # noqa: PLC0415
+                inv = Investigation(
+                    id=investigation_id,
+                    started_at=started_at,
+                    finished_at=datetime.now(timezone.utc).isoformat(),
+                    trigger="webhook",
+                    source="salesforce",
+                    source_id=c_id,
+                    source_url=c_url,
+                    question=question,
+                    answer=answer,
+                    tool_calls=[ToolCallRecord(**tc) for tc in tool_calls_data],
+                    project_id="",
+                    status=status,
+                    error=error_msg,
+                )
+                get_investigation_store().save(inv)
+                logging.info(
+                    "Salesforce webhook: saved investigation %s for case %s",
+                    investigation_id, c_id,
+                )
+            except Exception:
+                logging.warning(
+                    "Salesforce webhook: failed to persist investigation", exc_info=True
+                )
+
+            # ── 5. Write answer back to Salesforce Case as a comment ──────────
+            if answer and status == "completed":
+                try:
+                    sf_instance_url = os.environ.get("SALESFORCE_INSTANCE_URL", "").rstrip("/")
+                    sf_access_token = os.environ.get("SALESFORCE_ACCESS_TOKEN", "")
+                    if sf_instance_url and sf_access_token and c_id:
+                        import requests as _requests  # noqa: PLC0415
+                        comment_body = f"HolmesGPT Investigation\n\n{answer}"
+                        resp = _requests.post(
+                            f"{sf_instance_url}/services/data/v59.0/sobjects/CaseComment",
+                            headers={
+                                "Authorization": f"Bearer {sf_access_token}",
+                                "Content-Type": "application/json",
+                            },
+                            json={
+                                "ParentId": c_id,
+                                "CommentBody": comment_body,
+                                "IsPublished": False,
+                            },
+                            timeout=15,
+                        )
+                        if resp.ok:
+                            logging.info(
+                                "Salesforce webhook: wrote comment to case %s", c_id
+                            )
+                        else:
+                            logging.warning(
+                                "Salesforce webhook: comment write-back failed %s: %s",
+                                resp.status_code, resp.text,
+                            )
+                    else:
+                        logging.info(
+                            "Salesforce webhook: SALESFORCE_INSTANCE_URL or SALESFORCE_ACCESS_TOKEN "
+                            "not set — skipping write-back for case %s", c_id
+                        )
+                except Exception:
+                    logging.warning(
+                        "Salesforce webhook: write-back exception for case %s",
+                        c_id, exc_info=True,
+                    )
+
+        _threading.Thread(target=_run_sf_investigation, daemon=True).start()
+
+        return JSONResponse({"ok": True})
 
     # Static file serving - must be registered last (catch-all)
     @app.get("/{path:path}")

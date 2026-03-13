@@ -13,6 +13,8 @@ import json
 import logging
 import threading
 import time
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
 
@@ -59,6 +61,107 @@ from holmes.core.tools_utils.filesystem_result_storage import tool_result_storag
 from holmes.utils.stream import stream_chat_formatter
 
 # removed: add_runbooks_to_user_prompt
+
+
+def _save_investigation(
+    investigation_id: str,
+    started_at: str,
+    question: str,
+    project_id: str,
+    answer: str,
+    tool_calls: list,
+    status: str,
+    error: str = "",
+) -> None:
+    """Persist a completed investigation to DynamoDB (best-effort, never raises)."""
+    table_name = os.environ.get("HOLMES_DYNAMODB_TABLE", "")
+    if not table_name:
+        return
+    try:
+        import sys as _sys
+        import os as _os
+        _frontend_dir = _os.path.join(_os.path.dirname(__file__), "infra", "frontend")
+        if _frontend_dir not in _sys.path:
+            _sys.path.insert(0, _frontend_dir)
+        from projects import get_investigation_store, Investigation, ToolCallRecord  # type: ignore  # noqa: PLC0415
+
+        from datetime import datetime, timezone
+        inv = Investigation(
+            id=investigation_id,
+            started_at=started_at,
+            finished_at=datetime.now(timezone.utc).isoformat(),
+            trigger="manual",
+            source="ui",
+            question=question,
+            answer=answer,
+            tool_calls=[ToolCallRecord(**tc) for tc in tool_calls],
+            project_id=project_id or "",
+            status=status,
+            error=error,
+        )
+        get_investigation_store().save(inv)
+        logging.debug("Saved investigation %s to DynamoDB", investigation_id)
+    except Exception:
+        logging.warning("Failed to save investigation to DynamoDB", exc_info=True)
+
+
+def _investigation_tracking_stream(
+    call_stream,
+    investigation_id: str,
+    started_at: str,
+    question: str,
+    project_id: str,
+):
+    """
+    Wrap call_stream to intercept StreamMessage events and accumulate the tool
+    call trace and final answer, then persist the investigation to DynamoDB.
+
+    Passes every StreamMessage through unchanged so stream_chat_formatter sees
+    the same events it always did.
+    """
+    from holmes.utils.stream import StreamEvents  # noqa: PLC0415
+
+    tool_calls: list = []
+    final_answer: str = ""
+    status: str = "completed"
+    error_msg: str = ""
+
+    try:
+        for message in call_stream:
+            # Accumulate tool call records
+            if message.event == StreamEvents.TOOL_RESULT:
+                try:
+                    from datetime import datetime, timezone as _tz  # noqa: PLC0415
+                    tool_calls.append({
+                        "tool_name": message.data.get("name", ""),
+                        "tool_input": {},  # not exposed in streaming data
+                        "tool_output": (message.data.get("result") or {}).get("data", ""),
+                        "called_at": datetime.now(_tz.utc).isoformat(),
+                    })
+                except Exception:
+                    pass  # never block the stream
+
+            # Capture the final answer
+            elif message.event == StreamEvents.ANSWER_END:
+                final_answer = message.data.get("content", "")
+
+            yield message
+
+    except Exception as exc:
+        status = "failed"
+        error_msg = str(exc)
+        raise
+    finally:
+        _save_investigation(
+            investigation_id=investigation_id,
+            started_at=started_at,
+            question=question,
+            project_id=project_id,
+            answer=final_answer,
+            tool_calls=tool_calls,
+            status=status,
+            error=error_msg,
+        )
 
 
 def init_logging():
@@ -302,10 +405,48 @@ def extract_passthrough_headers(request: Request) -> dict:
     return {"headers": passthrough_headers} if passthrough_headers else {}
 
 
+def _stream_with_keepalive(stream_generator, keepalive_interval: int = 30):
+    """
+    Wrap a stream generator to emit SSE keepalive comments while the generator
+    is blocked (e.g. waiting for an LLM response or a slow tool call).
+
+    The ALB idle timeout is 300 s. Without keepalives, a long LLM call with no
+    bytes sent causes the ALB to close the connection with a 502. SSE comment
+    lines (': keep-alive\\n\\n') are ignored by browsers and the Holmes frontend
+    but reset the ALB idle timer.
+    """
+    import queue as _queue
+
+    q: _queue.Queue = _queue.Queue()
+    _SENTINEL = object()
+
+    def _producer():
+        try:
+            for chunk in stream_generator:
+                q.put(chunk)
+        finally:
+            q.put(_SENTINEL)
+
+    t = threading.Thread(target=_producer, daemon=True)
+    t.start()
+
+    while True:
+        try:
+            item = q.get(timeout=keepalive_interval)
+        except _queue.Empty:
+            # No chunk arrived within the interval — send a keepalive comment
+            yield ": keep-alive\n\n"
+            continue
+
+        if item is _SENTINEL:
+            break
+        yield item
+
+
 def _stream_with_storage_cleanup(storage, stream_generator, req_info):
     """Wrap a stream generator to clean up tool result files after streaming completes."""
     try:
-        yield from stream_generator
+        yield from _stream_with_keepalive(stream_generator)
     finally:
         logging.info(f"Stream request end: {req_info}")
         storage.__exit__(None, None, None)
@@ -366,21 +507,40 @@ def chat(chat_request: ChatRequest, http_request: Request):
         storage = tool_result_storage()
         tool_results_dir = storage.__enter__()
 
+        # Ensure infra/frontend is on sys.path so we can import shared helpers
+        import sys
+        import os as _os
+        import re as _re
+        _frontend_dir = _os.path.join(_os.path.dirname(__file__), "infra", "frontend")
+        if _frontend_dir not in sys.path:
+            sys.path.insert(0, _frontend_dir)
+
+        def _extract_source_from_ask(ask: str) -> str:
+            """Extract source= value from ask string, e.g. 'source=azure_devops ...'"""
+            m = _re.search(r'\bsource=([A-Za-z0-9_\-]+)', ask or "")
+            return m.group(1) if m else ""
+
+        def _make_scoped_ai(source: str):
+            """Build a scoped ToolCallingLLM capped at MAX_TOOLS_PER_CALL tools."""
+            try:
+                from server_frontend import _create_scoped_toolcalling_llm  # type: ignore  # noqa: PLC0415
+                return _create_scoped_toolcalling_llm(config, source, model=chat_request.model)
+            except Exception:
+                logging.warning("Failed to build scoped tool executor, falling back to global", exc_info=True)
+                return config.create_toolcalling_llm(
+                    dal=dal, model=chat_request.model, tool_results_dir=tool_results_dir
+                )
+
         # Build a project-scoped ToolCallingLLM when project_id is provided
         if chat_request.project_id:
             try:
-                import sys
-                import os as _os
-                _frontend_dir = _os.path.join(_os.path.dirname(__file__), "infra", "frontend")
-                if _frontend_dir not in sys.path:
-                    sys.path.insert(0, _frontend_dir)
-                from projects import get_store, build_project_tool_executor  # type: ignore  # noqa: PLC0415
+                from projects import get_store, get_instances_store, build_project_tool_executor  # type: ignore  # noqa: PLC0415
 
                 project = get_store().get(chat_request.project_id)
                 if project:
                     from holmes.core.tool_calling_llm import ToolCallingLLM  # noqa: PLC0415
 
-                    project_executor = build_project_tool_executor(project, config, dal)
+                    project_executor = build_project_tool_executor(project, config, dal, get_instances_store())
                     ai = ToolCallingLLM(
                         project_executor,
                         config.max_steps,
@@ -389,19 +549,17 @@ def chat(chat_request: ChatRequest, http_request: Request):
                     )
                     logging.info("Using project-scoped tool executor for project '%s'", project.name)
                 else:
-                    logging.warning("Project '%s' not found, falling back to global executor", chat_request.project_id)
-                    ai = config.create_toolcalling_llm(
-                        dal=dal, model=chat_request.model, tool_results_dir=tool_results_dir
-                    )
+                    logging.warning("Project '%s' not found, falling back to scoped executor", chat_request.project_id)
+                    source = _extract_source_from_ask(chat_request.ask)
+                    ai = _make_scoped_ai(source)
             except Exception:
-                logging.warning("Failed to build project executor, falling back to global", exc_info=True)
-                ai = config.create_toolcalling_llm(
-                    dal=dal, model=chat_request.model, tool_results_dir=tool_results_dir
-                )
+                logging.warning("Failed to build project executor, falling back to scoped", exc_info=True)
+                source = _extract_source_from_ask(chat_request.ask)
+                ai = _make_scoped_ai(source)
         else:
-            ai = config.create_toolcalling_llm(
-                dal=dal, model=chat_request.model, tool_results_dir=tool_results_dir
-            )
+            # No project — use source-scoped executor to stay within Anthropic tool limits
+            source = _extract_source_from_ask(chat_request.ask)
+            ai = _make_scoped_ai(source)
         global_instructions = dal.get_global_instructions_for_account()
         messages = build_chat_messages(
             chat_request.ask,
@@ -416,14 +574,24 @@ def chat(chat_request: ChatRequest, http_request: Request):
         )
 
         if chat_request.stream:
+            investigation_id = uuid.uuid4().hex
+            started_at = datetime.now(timezone.utc).isoformat()
+            raw_stream = ai.call_stream(
+                msgs=messages,
+                enable_tool_approval=chat_request.enable_tool_approval or False,
+                tool_decisions=chat_request.tool_decisions,
+                response_format=chat_request.response_format,
+                request_context=request_context,
+            )
+            tracked_stream = _investigation_tracking_stream(
+                raw_stream,
+                investigation_id=investigation_id,
+                started_at=started_at,
+                question=chat_request.ask,
+                project_id=chat_request.project_id or "",
+            )
             stream = stream_chat_formatter(
-                ai.call_stream(
-                    msgs=messages,
-                    enable_tool_approval=chat_request.enable_tool_approval or False,
-                    tool_decisions=chat_request.tool_decisions,
-                    response_format=chat_request.response_format,
-                    request_context=request_context,
-                ),
+                tracked_stream,
                 [f.model_dump() for f in follow_up_actions],
             )
             return StreamingResponse(

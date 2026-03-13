@@ -142,6 +142,7 @@ class CoreInvestigationToolset(Toolset):
             tags=[ToolsetTag.CORE],
             is_default=True,
         )
+        self._reload_instructions()
 
     def _reload_instructions(self):
         template_file_path = os.path.abspath(

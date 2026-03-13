@@ -2,9 +2,12 @@
 Projects and LLM instructions persistence backed by DynamoDB.
 
 Table schema (single-table design):
-  pk                  | sk              | data / instructions
-  PROJECT#<id>        | META            | JSON-serialised Project
-  LLM_OVERRIDE        | <toolset_name>  | instructions string
+  pk                    | sk              | data / instructions
+  PROJECT#<id>          | META            | JSON-serialised Project
+  INSTANCE#<id>         | META            | JSON-serialised Instance
+  LLM_OVERRIDE          | <toolset_name>  | instructions string
+  TOOLSET_STATE         | <toolset_name>  | enabled bool
+  INVESTIGATION#<id>    | META            | JSON-serialised Investigation
 """
 from __future__ import annotations
 
@@ -13,7 +16,7 @@ import logging
 import os
 import uuid
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Literal, Optional
 
 import boto3
 from boto3.dynamodb.conditions import Key
@@ -27,7 +30,7 @@ AWS_REGION = os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
 
 
 class ToolsetInstance(BaseModel):
-    """One integration instance within a project."""
+    """One integration instance within a project (legacy model kept for backwards compat)."""
 
     type: str  # base toolset type: "grafana/dashboards", "aws_api", "salesforce", "ado", "atlassian"
     name: str  # unique instance name: "grafana-logistics", "aws_api"
@@ -38,12 +41,69 @@ class ToolsetInstance(BaseModel):
     aws_accounts: Optional[list[str]] = None
 
 
+class TagFilter(BaseModel):
+    """Tag-based filter that determines which instances a project uses."""
+
+    logic: Literal["AND", "OR"] = "AND"
+    tags: dict[str, str] = {}
+
+
+class Instance(BaseModel):
+    """Top-level instance resource with free-form tags for routing."""
+
+    id: str = Field(default_factory=lambda: uuid.uuid4().hex)
+    type: str  # base toolset type: "grafana/dashboards", "aws_api", "salesforce", "ado", "atlassian"
+    name: str  # unique instance name: "grafana-logistics", "aws_api"
+    tags: dict[str, str] = {}  # free-form key-value tags; empty = global (always included)
+    secret_arn: Optional[str] = None
+    mcp_url: Optional[str] = None
+    aws_accounts: Optional[list[str]] = None
+    created_at: str = ""
+
+
 class Project(BaseModel):
     id: str = Field(default_factory=lambda: uuid.uuid4().hex)
     name: str
     description: str = ""
-    instances: list[ToolsetInstance] = []
+    tag_filter: Optional[TagFilter] = None  # None = only global (untagged) instances
     created_at: str = ""
+
+
+# ── Tag matching logic ─────────────────────────────────────────────────────────
+
+
+def match_instance(instance: Instance, tag_filter: TagFilter) -> bool:
+    """
+    Return True if *instance* should be included given *tag_filter*.
+
+    Rules:
+    - Untagged instance (empty tags dict) → always True (global instance)
+    - Empty tag_filter.tags → only global instances match (tagged instances excluded)
+    - AND logic → all filter key=value pairs must match instance tags
+    - OR logic → at least one filter key=value pair must match instance tags
+    """
+    if not instance.tags:
+        return True  # untagged = global, always included
+    if not tag_filter.tags:
+        return False  # empty filter only matches globals
+    if tag_filter.logic == "AND":
+        return all(instance.tags.get(k) == v for k, v in tag_filter.tags.items())
+    else:  # OR
+        return any(instance.tags.get(k) == v for k, v in tag_filter.tags.items())
+
+
+def resolve_instances_for_project(
+    project: Project, all_instances: list[Instance]
+) -> list[Instance]:
+    """
+    Return the list of instances that should be active for *project*.
+
+    - If project.tag_filter is None → only global (untagged) instances
+    - Otherwise → all instances where match_instance() returns True
+    """
+    if project.tag_filter is None:
+        return [i for i in all_instances if not i.tags]
+    return [i for i in all_instances if match_instance(i, project.tag_filter)]
 
 
 # ── DynamoDB helpers ───────────────────────────────────────────────────────────
@@ -53,15 +113,96 @@ def _get_table():
     return boto3.resource("dynamodb", region_name=AWS_REGION).Table(TABLE_NAME)
 
 
+# ── Instances store ─────────────────────────────────────────────────────────────
+
+
+class InstancesStore:
+    def create(
+        self,
+        type: str,
+        name: str,
+        tags: dict[str, str] = {},
+        secret_arn: Optional[str] = None,
+        mcp_url: Optional[str] = None,
+        aws_accounts: Optional[list[str]] = None,
+    ) -> Instance:
+        inst = Instance(
+            type=type,
+            name=name,
+            tags=tags,
+            secret_arn=secret_arn,
+            mcp_url=mcp_url,
+            aws_accounts=aws_accounts,
+            created_at=datetime.now(timezone.utc).isoformat(),
+        )
+        _get_table().put_item(
+            Item={"pk": f"INSTANCE#{inst.id}", "sk": "META", "data": inst.model_dump_json()}
+        )
+        return inst
+
+    def update(self, instance_id: str, **kwargs) -> Optional[Instance]:
+        inst = self.get(instance_id)
+        if not inst:
+            return None
+        for k, v in kwargs.items():
+            setattr(inst, k, v)
+        _get_table().put_item(
+            Item={"pk": f"INSTANCE#{inst.id}", "sk": "META", "data": inst.model_dump_json()}
+        )
+        return inst
+
+    def delete(self, instance_id: str) -> bool:
+        resp = _get_table().delete_item(
+            Key={"pk": f"INSTANCE#{instance_id}", "sk": "META"},
+            ReturnValues="ALL_OLD",
+        )
+        return bool(resp.get("Attributes"))
+
+    def get(self, instance_id: str) -> Optional[Instance]:
+        resp = _get_table().get_item(Key={"pk": f"INSTANCE#{instance_id}", "sk": "META"})
+        item = resp.get("Item")
+        if not item:
+            return None
+        return Instance.model_validate_json(item["data"])
+
+    def list(self) -> list[Instance]:
+        from boto3.dynamodb.conditions import Attr  # noqa: PLC0415
+        table = _get_table()
+        filter_expr = Attr("pk").begins_with("INSTANCE#") & Attr("sk").eq("META")
+        items: list = []
+        kwargs: dict = {"FilterExpression": filter_expr}
+        while True:
+            resp = table.scan(**kwargs)
+            items.extend(resp.get("Items", []))
+            last_key = resp.get("LastEvaluatedKey")
+            if not last_key:
+                break
+            kwargs["ExclusiveStartKey"] = last_key
+        instances = [Instance.model_validate_json(item["data"]) for item in items]
+        return sorted(instances, key=lambda i: i.created_at)
+
+
+_instances_store = InstancesStore()
+
+
+def get_instances_store() -> InstancesStore:
+    return _instances_store
+
+
 # ── Projects store ─────────────────────────────────────────────────────────────
 
 
 class ProjectsStore:
-    def create(self, name: str, description: str, instances: list[dict]) -> Project:
+    def create(
+        self,
+        name: str,
+        description: str,
+        tag_filter: Optional[dict] = None,
+    ) -> Project:
         p = Project(
             name=name,
             description=description,
-            instances=[ToolsetInstance(**i) for i in instances],
+            tag_filter=TagFilter(**tag_filter) if tag_filter else None,
             created_at=datetime.now(timezone.utc).isoformat(),
         )
         _get_table().put_item(
@@ -74,8 +215,8 @@ class ProjectsStore:
         if not p:
             return None
         for k, v in kwargs.items():
-            if k == "instances":
-                v = [ToolsetInstance(**i) for i in v]
+            if k == "tag_filter":
+                v = TagFilter(**v) if v else None
             setattr(p, k, v)
         _get_table().put_item(
             Item={"pk": f"PROJECT#{p.id}", "sk": "META", "data": p.model_dump_json()}
@@ -97,12 +238,20 @@ class ProjectsStore:
         return Project.model_validate_json(item["data"])
 
     def list(self) -> list[Project]:
-        # Scan for all PROJECT# items (small table — scan is fine)
-        resp = _get_table().scan(
-            FilterExpression="begins_with(pk, :prefix) AND sk = :sk",
-            ExpressionAttributeValues={":prefix": "PROJECT#", ":sk": "META"},
-        )
-        projects = [Project.model_validate_json(item["data"]) for item in resp.get("Items", [])]
+        # Scan for all PROJECT# items with pagination support
+        from boto3.dynamodb.conditions import Attr  # noqa: PLC0415
+        table = _get_table()
+        filter_expr = Attr("pk").begins_with("PROJECT#") & Attr("sk").eq("META")
+        items: list = []
+        kwargs: dict = {"FilterExpression": filter_expr}
+        while True:
+            resp = table.scan(**kwargs)
+            items.extend(resp.get("Items", []))
+            last_key = resp.get("LastEvaluatedKey")
+            if not last_key:
+                break
+            kwargs["ExclusiveStartKey"] = last_key
+        projects = [Project.model_validate_json(item["data"]) for item in items]
         return sorted(projects, key=lambda p: p.created_at)
 
 
@@ -169,6 +318,129 @@ def get_toolset_state_store() -> ToolsetStateStore:
     return _toolset_state_store
 
 
+# ── Investigation history store ────────────────────────────────────────────────
+
+
+class ToolCallRecord(BaseModel):
+    """One tool call made by Holmes during an investigation."""
+
+    tool_name: str
+    tool_input: dict = {}
+    tool_output: str = ""
+    # ISO timestamp when the tool was called
+    called_at: str = ""
+
+
+class Investigation(BaseModel):
+    id: str = Field(default_factory=lambda: uuid.uuid4().hex)
+    # When the investigation started (ISO 8601 UTC)
+    started_at: str = ""
+    # When the investigation finished (ISO 8601 UTC)
+    finished_at: str = ""
+    # "manual" | "webhook" | "cli"
+    trigger: str = "manual"
+    # Source system: "pagerduty" | "ado" | "salesforce" | "ui" | "cli"
+    source: str = "ui"
+    # ID of the incident/case/work-item in the source system (empty for ad-hoc UI chats)
+    source_id: str = ""
+    # URL to the source incident/case (empty if not applicable)
+    source_url: str = ""
+    # The user's question / prompt
+    question: str = ""
+    # Holmes's final answer
+    answer: str = ""
+    # Full tool call trace — every tool Holmes called, in order
+    tool_calls: list[ToolCallRecord] = []
+    # Project context (empty string = global / no project)
+    project_id: str = ""
+    # "running" | "completed" | "failed"
+    status: str = "completed"
+    # Error message if status == "failed"
+    error: str = ""
+
+
+class InvestigationStore:
+    """Persist investigation history to DynamoDB."""
+
+    def save(self, investigation: Investigation) -> Investigation:
+        """Insert or overwrite an investigation record."""
+        _get_table().put_item(
+            Item={
+                "pk": f"INVESTIGATION#{investigation.id}",
+                "sk": "META",
+                "data": investigation.model_dump_json(),
+                # Store started_at as a top-level attribute for efficient range queries
+                "started_at": investigation.started_at,
+                "source": investigation.source,
+            }
+        )
+        return investigation
+
+    def get(self, investigation_id: str) -> Optional[Investigation]:
+        resp = _get_table().get_item(
+            Key={"pk": f"INVESTIGATION#{investigation_id}", "sk": "META"}
+        )
+        item = resp.get("Item")
+        if not item:
+            return None
+        return Investigation.model_validate_json(item["data"])
+
+    def list(
+        self,
+        limit: int = 50,
+        source: Optional[str] = None,
+        project_id: Optional[str] = None,
+    ) -> list[Investigation]:
+        """
+        Return investigations sorted by started_at descending (newest first).
+
+        Scans the table for INVESTIGATION# items. For small tables (< a few thousand
+        investigations) a scan is acceptable; add a GSI on started_at if needed later.
+        """
+        from boto3.dynamodb.conditions import Attr  # noqa: PLC0415
+        filter_expr = Attr("pk").begins_with("INVESTIGATION#") & Attr("sk").eq("META")
+        if source:
+            filter_expr = filter_expr & Attr("source").eq(source)
+
+        table = _get_table()
+        items: list = []
+        kwargs: dict = {"FilterExpression": filter_expr}
+        while True:
+            resp = table.scan(**kwargs)
+            items.extend(resp.get("Items", []))
+            last_key = resp.get("LastEvaluatedKey")
+            if not last_key:
+                break
+            kwargs["ExclusiveStartKey"] = last_key
+
+        investigations = [
+            Investigation.model_validate_json(item["data"])
+            for item in items
+        ]
+
+        # Filter by project_id in Python (avoids another DynamoDB attribute)
+        if project_id is not None:
+            investigations = [i for i in investigations if i.project_id == project_id]
+
+        # Sort newest first, cap at limit
+        investigations.sort(key=lambda i: i.started_at, reverse=True)
+        return investigations[:limit]
+
+    def delete(self, investigation_id: str) -> bool:
+        resp = _get_table().delete_item(
+            Key={"pk": f"INVESTIGATION#{investigation_id}", "sk": "META"},
+            ReturnValues="ALL_OLD",
+        )
+        return bool(resp.get("Attributes"))
+
+
+_investigation_store = InvestigationStore()
+
+
+def get_investigation_store() -> InvestigationStore:
+    return _investigation_store
+
+
 # ── Per-project tool executor ──────────────────────────────────────────────────
 
 
@@ -201,11 +473,21 @@ _MCP_DESCRIPTIONS = {
     "salesforce": "Salesforce - accounts, contacts, opportunities, cases, and CRM data",
 }
 
-_MCP_LLM_INSTRUCTIONS = {
-    "ado": "Use this toolset to query Azure DevOps work items, pull requests, repositories, pipelines, and boards. Prefer WIQL queries for work item searches.",
-    "atlassian": "Use this toolset to search and retrieve Jira issues, Confluence pages, and Atlassian project information. Prefer JQL for Jira queries.",
-    "salesforce": "Use this toolset to query Salesforce CRM data including accounts, contacts, opportunities, cases, and custom objects. Prefer SOQL queries for data retrieval.",
-}
+_MCP_INSTRUCTIONS_DIR = os.path.join(os.path.dirname(__file__), "mcp_instructions")
+
+
+def _load_mcp_instructions(toolset_type: str) -> str:
+    """Load LLM instructions for an MCP toolset from its Jinja2 template file."""
+    path = os.path.join(_MCP_INSTRUCTIONS_DIR, f"{toolset_type}.jinja2")
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read()
+    except FileNotFoundError:
+        logging.debug("No MCP instructions file found at %s", path)
+        return ""
+    except Exception:
+        logging.exception("Failed to load MCP instructions from %s", path)
+        return ""
 
 
 def _build_mcp_toolset(instance: ToolsetInstance, api_key: str) -> object:
@@ -220,7 +502,7 @@ def _build_mcp_toolset(instance: ToolsetInstance, api_key: str) -> object:
         name=instance.name,
         description=_MCP_DESCRIPTIONS.get(instance.type, f"{instance.type} MCP server"),
         icon_url=_MCP_ICONS.get(instance.type),
-        llm_instructions=_MCP_LLM_INSTRUCTIONS.get(instance.type, ""),
+        llm_instructions=_load_mcp_instructions(instance.type),
         config={
             "url": url,
             "mode": "streamable-http",
@@ -258,9 +540,28 @@ def _build_aws_toolset_with_account_filter(
     return ts
 
 
-def build_project_tool_executor(project: Project, config, dal):
+def _instance_to_toolset_instance(instance: Instance) -> ToolsetInstance:
+    """Convert a top-level Instance to a ToolsetInstance for tool loading."""
+    return ToolsetInstance(
+        type=instance.type,
+        name=instance.name,
+        secret_arn=instance.secret_arn,
+        mcp_url=instance.mcp_url,
+        aws_accounts=instance.aws_accounts,
+    )
+
+
+def build_project_tool_executor(
+    project: Project,
+    config,
+    dal,
+    instances_store: Optional[InstancesStore] = None,
+):
     """
-    Build a ToolExecutor scoped to the toolset instances defined in *project*.
+    Build a ToolExecutor scoped to the instances resolved for *project* via tag matching.
+
+    If *instances_store* is provided, resolves instances by tag filter.
+    Falls back to global tool executor if no instances are resolved.
 
     Handles three cases per instance:
     1. Python toolsets (grafana, prometheus) with secret_arn → dynamically instantiated
@@ -277,8 +578,18 @@ def build_project_tool_executor(project: Project, config, dal):
     config.create_tool_executor(dal)  # ensure global executor is ready
     global_by_name = {ts.name: ts for ts in config._server_tool_executor.toolsets}
 
+    # Resolve instances via tag filter
+    toolset_instances: list[ToolsetInstance] = []
+    if instances_store is not None:
+        all_instances = instances_store.list()
+        resolved = resolve_instances_for_project(project, all_instances)
+        toolset_instances = [_instance_to_toolset_instance(i) for i in resolved]
+    else:
+        # No instances store provided — return empty executor (global tools only)
+        toolset_instances = []
+
     project_toolsets = []
-    for instance in project.instances:
+    for instance in toolset_instances:
         try:
             # ── MCP toolset with per-project API key ──────────────────────────
             if instance.type in _MCP_TOOLSET_TYPES and instance.secret_arn:

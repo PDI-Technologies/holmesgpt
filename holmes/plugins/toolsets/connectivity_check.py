@@ -1,3 +1,4 @@
+import os
 import socket
 from typing import Any, Dict, Literal
 
@@ -118,4 +119,7 @@ class ConnectivityCheckToolset(Toolset):
             is_default=True,
             enabled=True,
             docs_url="https://holmesgpt.dev/data-sources/builtin-toolsets/connectivity-check/",
+        )
+        self._load_llm_instructions_from_file(
+            os.path.dirname(__file__), "connectivity_check_instructions.jinja2"
         )

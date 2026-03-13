@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import Layout from './components/Layout'
 import Chat from './components/Chat'
 import Investigate from './components/Investigate'
+import InvestigationHistory from './components/InvestigationHistory'
 import Integrations from './components/Integrations'
 import Settings from './components/Settings'
 import Projects from './components/Projects'
@@ -9,7 +10,7 @@ import LoginPage from './components/LoginPage'
 import { api } from './lib/api'
 import { useProject } from './hooks/useProject'
 
-export type Page = 'chat' | 'investigate' | 'integrations' | 'settings' | 'projects'
+export type Page = 'chat' | 'investigate' | 'history' | 'integrations' | 'settings' | 'projects'
 
 export default function App() {
   const [page, setPage] = useState<Page>('chat')
@@ -46,7 +47,8 @@ export default function App() {
       onSelectProject={selectProject}
     >
       {page === 'chat' && <Chat projectId={selectedProjectId} />}
-      {page === 'investigate' && <Investigate />}
+      {page === 'investigate' && <Investigate projectId={selectedProjectId} selectedProject={selectedProject} />}
+      {page === 'history' && <InvestigationHistory />}
       {page === 'integrations' && <Integrations />}
       {page === 'settings' && <Settings />}
       {page === 'projects' && <Projects projects={projects} onReload={reloadProjects} />}

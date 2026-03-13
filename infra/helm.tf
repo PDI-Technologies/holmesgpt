@@ -1,9 +1,12 @@
 # Locals to decode Secrets Manager values for use in this file
 locals {
-  mcp_keys  = jsondecode(data.aws_secretsmanager_secret_version.mcp_api_keys.secret_string)
-  ui_creds  = jsondecode(data.aws_secretsmanager_secret_version.holmes_ui_credentials.secret_string)
-  grafana   = jsondecode(data.aws_secretsmanager_secret_version.grafana.secret_string)
-  datadog   = jsondecode(data.aws_secretsmanager_secret_version.datadog.secret_string)
+  mcp_keys          = jsondecode(data.aws_secretsmanager_secret_version.mcp_api_keys.secret_string)
+  ui_creds          = jsondecode(data.aws_secretsmanager_secret_version.holmes_ui_credentials.secret_string)
+  grafana           = jsondecode(data.aws_secretsmanager_secret_version.grafana.secret_string)
+  datadog           = jsondecode(data.aws_secretsmanager_secret_version.datadog.secret_string)
+  pagerduty         = jsondecode(data.aws_secretsmanager_secret_version.pagerduty.secret_string)
+  ado_webhook       = jsondecode(data.aws_secretsmanager_secret_version.ado_webhook.secret_string)
+  salesforce_webhook = jsondecode(data.aws_secretsmanager_secret_version.salesforce_webhook.secret_string)
 }
 
 # Kubernetes namespace for Holmes
@@ -35,6 +38,16 @@ resource "kubernetes_secret" "holmes_api_keys" {
     DATADOG_API_KEY        = local.datadog["DATADOG_API_KEY"]
     DATADOG_APP_KEY        = local.datadog["DATADOG_APP_KEY"]
     DATADOG_API_URL        = local.datadog["DATADOG_API_URL"]
+    PAGERDUTY_API_KEY        = local.pagerduty["PAGERDUTY_API_KEY"]
+    PAGERDUTY_USER_EMAIL     = local.pagerduty["PAGERDUTY_USER_EMAIL"]
+    PAGERDUTY_WEBHOOK_SECRET = local.pagerduty["PAGERDUTY_WEBHOOK_SECRET"]
+    ADO_WEBHOOK_USERNAME     = local.ado_webhook["ADO_WEBHOOK_USERNAME"]
+    ADO_WEBHOOK_PASSWORD     = local.ado_webhook["ADO_WEBHOOK_PASSWORD"]
+    ADO_PAT                  = local.ado_webhook["ADO_PAT"]
+    ADO_ORGANIZATION         = local.ado_webhook["ADO_ORGANIZATION"]
+    SALESFORCE_WEBHOOK_TOKEN = local.salesforce_webhook["SALESFORCE_WEBHOOK_TOKEN"]
+    SALESFORCE_INSTANCE_URL  = local.salesforce_webhook["SALESFORCE_INSTANCE_URL"]
+    SALESFORCE_ACCESS_TOKEN  = local.salesforce_webhook["SALESFORCE_ACCESS_TOKEN"]
   }
 
   type = "Opaque"
@@ -172,6 +185,96 @@ resource "helm_release" "holmes" {
             secretKeyRef = {
               name = kubernetes_secret.holmes_api_keys.metadata[0].name
               key  = "DATADOG_API_URL"
+            }
+          }
+        },
+        {
+          name = "PAGERDUTY_API_KEY"
+          valueFrom = {
+            secretKeyRef = {
+              name = kubernetes_secret.holmes_api_keys.metadata[0].name
+              key  = "PAGERDUTY_API_KEY"
+            }
+          }
+        },
+        {
+          name = "PAGERDUTY_USER_EMAIL"
+          valueFrom = {
+            secretKeyRef = {
+              name = kubernetes_secret.holmes_api_keys.metadata[0].name
+              key  = "PAGERDUTY_USER_EMAIL"
+            }
+          }
+        },
+        {
+          name = "PAGERDUTY_WEBHOOK_SECRET"
+          valueFrom = {
+            secretKeyRef = {
+              name = kubernetes_secret.holmes_api_keys.metadata[0].name
+              key  = "PAGERDUTY_WEBHOOK_SECRET"
+            }
+          }
+        },
+        {
+          name = "ADO_WEBHOOK_USERNAME"
+          valueFrom = {
+            secretKeyRef = {
+              name = kubernetes_secret.holmes_api_keys.metadata[0].name
+              key  = "ADO_WEBHOOK_USERNAME"
+            }
+          }
+        },
+        {
+          name = "ADO_WEBHOOK_PASSWORD"
+          valueFrom = {
+            secretKeyRef = {
+              name = kubernetes_secret.holmes_api_keys.metadata[0].name
+              key  = "ADO_WEBHOOK_PASSWORD"
+            }
+          }
+        },
+        {
+          name = "ADO_PAT"
+          valueFrom = {
+            secretKeyRef = {
+              name = kubernetes_secret.holmes_api_keys.metadata[0].name
+              key  = "ADO_PAT"
+            }
+          }
+        },
+        {
+          name = "ADO_ORGANIZATION"
+          valueFrom = {
+            secretKeyRef = {
+              name = kubernetes_secret.holmes_api_keys.metadata[0].name
+              key  = "ADO_ORGANIZATION"
+            }
+          }
+        },
+        {
+          name = "SALESFORCE_WEBHOOK_TOKEN"
+          valueFrom = {
+            secretKeyRef = {
+              name = kubernetes_secret.holmes_api_keys.metadata[0].name
+              key  = "SALESFORCE_WEBHOOK_TOKEN"
+            }
+          }
+        },
+        {
+          name = "SALESFORCE_INSTANCE_URL"
+          valueFrom = {
+            secretKeyRef = {
+              name = kubernetes_secret.holmes_api_keys.metadata[0].name
+              key  = "SALESFORCE_INSTANCE_URL"
+            }
+          }
+        },
+        {
+          name = "SALESFORCE_ACCESS_TOKEN"
+          valueFrom = {
+            secretKeyRef = {
+              name = kubernetes_secret.holmes_api_keys.metadata[0].name
+              key  = "SALESFORCE_ACCESS_TOKEN"
             }
           }
         },

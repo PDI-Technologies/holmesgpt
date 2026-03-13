@@ -1,189 +1,173 @@
-import { useState, useEffect } from 'react'
-import { api, Project, ToolsetInstance, AwsAccount } from '../lib/api'
+import { useState, useEffect, useMemo } from 'react'
+import { api, type Project, type Instance, type TagFilter } from '../lib/api'
 
 interface ProjectsProps {
   projects: Project[]
   onReload: () => void
 }
 
-interface InstanceRow {
-  type: string
-  name: string
-  secret_arn: string
-  /** For MCP toolsets: optional URL override */
-  mcp_url: string
-  /** For aws_api: comma-separated list of allowed account profile names */
-  aws_accounts: string
-}
-
-const TOOLSET_TYPES = [
-  'grafana/dashboards',
-  'grafana/loki',
-  'grafana/tempo',
-  'prometheus/metrics',
-  'aws_api',
-  'ado',
-  'atlassian',
-  'salesforce',
-]
-
-const MCP_TYPES = new Set(['ado', 'atlassian', 'salesforce'])
-
-function InstanceEditor({
-  instances,
+function TagFilterEditor({
+  tagFilter,
   onChange,
-  awsAccounts,
 }: {
-  instances: InstanceRow[]
-  onChange: (rows: InstanceRow[]) => void
-  awsAccounts: AwsAccount[]
+  tagFilter: TagFilter
+  onChange: (tf: TagFilter) => void
 }) {
-  const add = () =>
-    onChange([...instances, { type: TOOLSET_TYPES[0], name: '', secret_arn: '', mcp_url: '', aws_accounts: '' }])
+  const entries = Object.entries(tagFilter.tags)
 
-  const remove = (i: number) => onChange(instances.filter((_, idx) => idx !== i))
-
-  const update = (i: number, field: keyof InstanceRow, value: string) => {
-    const next = instances.map((row, idx) => (idx === i ? { ...row, [field]: value } : row))
-    onChange(next)
+  const addTag = () => {
+    onChange({ ...tagFilter, tags: { ...tagFilter.tags, '': '' } })
   }
 
-  const toggleAwsAccount = (i: number, accountName: string) => {
-    const row = instances[i]
-    const current = row.aws_accounts ? row.aws_accounts.split(',').map(s => s.trim()).filter(Boolean) : []
-    const updated = current.includes(accountName)
-      ? current.filter(a => a !== accountName)
-      : [...current, accountName]
-    update(i, 'aws_accounts', updated.join(', '))
+  const removeTag = (key: string) => {
+    const next = { ...tagFilter.tags }
+    delete next[key]
+    onChange({ ...tagFilter, tags: next })
+  }
+
+  const updateKey = (oldKey: string, newKey: string) => {
+    const next: Record<string, string> = {}
+    for (const [k, v] of Object.entries(tagFilter.tags)) {
+      next[k === oldKey ? newKey : k] = v
+    }
+    onChange({ ...tagFilter, tags: next })
+  }
+
+  const updateValue = (key: string, value: string) => {
+    onChange({ ...tagFilter, tags: { ...tagFilter.tags, [key]: value } })
   }
 
   return (
-    <div className="space-y-4">
-      {instances.map((row, i) => (
-        <div key={i} className="border border-gray-200 rounded-lg p-3 space-y-2 bg-gray-50">
-          <div className="flex gap-2 items-start">
-            <select
-              value={row.type}
-              onChange={(e) => update(i, 'type', e.target.value)}
-              className="flex-shrink-0 w-44 text-sm border border-gray-300 rounded-md px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-pdi-sky"
-            >
-              {TOOLSET_TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
+    <div className="space-y-3">
+      {/* AND / OR toggle */}
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-medium text-gray-600">Match logic:</span>
+        {(['AND', 'OR'] as const).map((logic) => (
+          <button
+            key={logic}
+            type="button"
+            onClick={() => onChange({ ...tagFilter, logic })}
+            className={`px-3 py-1 text-xs font-medium rounded-full border transition-colors ${
+              tagFilter.logic === logic
+                ? 'bg-pdi-sky text-white border-pdi-sky'
+                : 'bg-white text-gray-600 border-gray-300 hover:border-pdi-sky'
+            }`}
+          >
+            {logic}
+          </button>
+        ))}
+        <span className="text-xs text-gray-400">
+          {tagFilter.logic === 'AND' ? '— all tags must match' : '— any tag must match'}
+        </span>
+      </div>
+
+      {/* Tag rows */}
+      <div className="space-y-2">
+        {entries.map(([k, v], i) => (
+          <div key={i} className="flex items-center gap-2">
             <input
               type="text"
-              placeholder="Instance name (e.g. grafana-logistics)"
-              value={row.name}
-              onChange={(e) => update(i, 'name', e.target.value)}
-              className="flex-1 text-sm border border-gray-300 rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-pdi-sky"
+              placeholder="key"
+              value={k}
+              onChange={(e) => updateKey(k, e.target.value)}
+              className="w-28 text-sm border border-gray-300 rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-pdi-sky font-mono"
+            />
+            <span className="text-gray-400 text-sm">=</span>
+            <input
+              type="text"
+              placeholder="value"
+              value={v}
+              onChange={(e) => updateValue(k, e.target.value)}
+              className="flex-1 text-sm border border-gray-300 rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-pdi-sky font-mono"
             />
             <button
               type="button"
-              onClick={() => remove(i)}
-              className="text-gray-400 hover:text-red-500 transition-colors mt-1.5 shrink-0"
-              title="Remove"
+              onClick={() => removeTag(k)}
+              className="text-gray-400 hover:text-red-500 transition-colors"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
           </div>
+        ))}
+        <button
+          type="button"
+          onClick={addTag}
+          className="flex items-center gap-1.5 text-sm text-pdi-sky hover:text-pdi-indigo transition-colors"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+          </svg>
+          Add tag filter
+        </button>
+      </div>
 
-          {/* MCP toolset fields */}
-          {MCP_TYPES.has(row.type) && (
-            <div className="space-y-2 pl-1">
-              <input
-                type="text"
-                placeholder="API Key Secret ARN (required for per-project key)"
-                value={row.secret_arn}
-                onChange={(e) => update(i, 'secret_arn', e.target.value)}
-                className="w-full text-sm border border-gray-300 rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-pdi-sky"
-              />
-              <input
-                type="text"
-                placeholder="MCP server URL override (optional — leave blank to use global)"
-                value={row.mcp_url}
-                onChange={(e) => update(i, 'mcp_url', e.target.value)}
-                className="w-full text-sm border border-gray-300 rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-pdi-sky"
-              />
-              <p className="text-xs text-gray-400">
-                Secret must contain <code className="bg-gray-100 px-1 rounded">api_key</code> field.
-                Leave Secret ARN blank to reuse the globally configured API key.
-              </p>
-            </div>
-          )}
+      {entries.length === 0 && (
+        <p className="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded px-2 py-1.5">
+          Empty filter — only global (untagged) instances will be used.
+        </p>
+      )}
+    </div>
+  )
+}
 
-          {/* Python toolset (grafana, prometheus) secret ARN */}
-          {!MCP_TYPES.has(row.type) && row.type !== 'aws_api' && (
-            <div className="pl-1">
-              <input
-                type="text"
-                placeholder="Secret ARN (optional — leave blank for global credentials)"
-                value={row.secret_arn}
-                onChange={(e) => update(i, 'secret_arn', e.target.value)}
-                className="w-full text-sm border border-gray-300 rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-pdi-sky"
-              />
-            </div>
-          )}
+function computePreview(tagFilter: TagFilter | null, allInstances: Instance[]): Instance[] {
+  if (tagFilter === null) {
+    return allInstances.filter((i) => Object.keys(i.tags).length === 0)
+  }
+  return allInstances.filter((i) => {
+    if (Object.keys(i.tags).length === 0) return true // global always included
+    if (!tagFilter.tags || Object.keys(tagFilter.tags).length === 0) return false
+    if (tagFilter.logic === 'AND') {
+      return Object.entries(tagFilter.tags).every(([k, v]) => i.tags[k] === v)
+    }
+    return Object.entries(tagFilter.tags).some(([k, v]) => i.tags[k] === v)
+  })
+}
 
-          {/* AWS account scoping */}
-          {row.type === 'aws_api' && (
-            <div className="pl-1 space-y-1.5">
-              {awsAccounts.length > 0 ? (
-                <>
-                  <p className="text-xs font-medium text-gray-600">
-                    Allowed AWS accounts (leave all unchecked to allow all):
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {awsAccounts.map((acct) => {
-                      const selected = row.aws_accounts
-                        ? row.aws_accounts.split(',').map(s => s.trim()).includes(acct.name)
-                        : false
-                      return (
-                        <button
-                          key={acct.name}
-                          type="button"
-                          onClick={() => toggleAwsAccount(i, acct.name)}
-                          className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
-                            selected
-                              ? 'bg-amber-100 border-amber-400 text-amber-800'
-                              : 'bg-white border-gray-300 text-gray-600 hover:border-amber-300'
-                          }`}
-                        >
-                          {acct.name}
-                          <span className="ml-1 text-gray-400">{acct.account_id}</span>
-                        </button>
-                      )
-                    })}
-                  </div>
-                  {row.aws_accounts && (
-                    <p className="text-xs text-gray-400">
-                      Scoped to: {row.aws_accounts}
-                    </p>
-                  )}
-                </>
+function InstancePreviewPanel({
+  tagFilter,
+  allInstances,
+}: {
+  tagFilter: TagFilter | null
+  allInstances: Instance[]
+}) {
+  const resolved = useMemo(() => computePreview(tagFilter, allInstances), [tagFilter, allInstances])
+
+  return (
+    <div className="border border-gray-200 rounded-lg p-3 bg-gray-50">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs font-medium text-gray-600">Preview</span>
+        <span className="text-xs text-gray-500">
+          {resolved.length} of {allInstances.length} instance{allInstances.length !== 1 ? 's' : ''} will be used
+        </span>
+      </div>
+      {resolved.length === 0 ? (
+        <p className="text-xs text-gray-400 italic">No instances match this filter.</p>
+      ) : (
+        <div className="space-y-1.5">
+          {resolved.map((inst) => (
+            <div key={inst.id} className="flex items-center gap-2">
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-pdi-sky/10 text-pdi-indigo">
+                {inst.type}
+              </span>
+              <span className="text-xs font-medium text-gray-800">{inst.name}</span>
+              {Object.keys(inst.tags).length === 0 ? (
+                <span className="text-xs text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">global</span>
               ) : (
-                <p className="text-xs text-gray-400">
-                  No AWS accounts configured globally. Add accounts via Terraform <code className="bg-gray-100 px-1 rounded">logistics_accounts</code> variable.
-                </p>
+                <div className="flex gap-1">
+                  {Object.entries(inst.tags).map(([k, v]) => (
+                    <span key={k} className="text-xs font-mono text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
+                      {k}={v}
+                    </span>
+                  ))}
+                </div>
               )}
             </div>
-          )}
+          ))}
         </div>
-      ))}
-      <button
-        type="button"
-        onClick={add}
-        className="flex items-center gap-1.5 text-sm text-pdi-sky hover:text-pdi-indigo transition-colors"
-      >
-        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-        </svg>
-        Add instance
-      </button>
+      )}
     </div>
   )
 }
@@ -199,21 +183,15 @@ function ProjectModal({
 }) {
   const [name, setName] = useState(project?.name ?? '')
   const [description, setDescription] = useState(project?.description ?? '')
-  const [instances, setInstances] = useState<InstanceRow[]>(
-    project?.instances.map((i) => ({
-      type: i.type,
-      name: i.name,
-      secret_arn: i.secret_arn ?? '',
-      mcp_url: i.mcp_url ?? '',
-      aws_accounts: i.aws_accounts ? i.aws_accounts.join(', ') : '',
-    })) ?? []
+  const [tagFilter, setTagFilter] = useState<TagFilter>(
+    project?.tag_filter ?? { logic: 'AND', tags: {} }
   )
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [awsAccounts, setAwsAccounts] = useState<AwsAccount[]>([])
+  const [allInstances, setAllInstances] = useState<Instance[]>([])
 
   useEffect(() => {
-    api.getAwsAccounts().then((data) => setAwsAccounts(data.accounts)).catch(() => {})
+    api.listInstances().then(setAllInstances).catch(() => {})
   }, [])
 
   const handleSave = async () => {
@@ -227,19 +205,7 @@ function ProjectModal({
       const payload = {
         name: name.trim(),
         description: description.trim(),
-        instances: instances
-          .filter((r) => r.name.trim())
-          .map(
-            (r): ToolsetInstance => ({
-              type: r.type,
-              name: r.name.trim(),
-              secret_arn: r.secret_arn.trim() || null,
-              mcp_url: r.mcp_url.trim() || null,
-              aws_accounts: r.aws_accounts.trim()
-                ? r.aws_accounts.split(',').map(s => s.trim()).filter(Boolean)
-                : null,
-            })
-          ),
+        tag_filter: tagFilter,
       }
       if (project) {
         await api.updateProject(project.id, payload)
@@ -263,7 +229,7 @@ function ProjectModal({
             {project ? 'Edit Project' : 'Create Project'}
           </h2>
         </div>
-        <div className="px-6 py-5 space-y-4 overflow-y-auto flex-1">
+        <div className="px-6 py-5 space-y-5 overflow-y-auto flex-1">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
             <input
@@ -286,13 +252,19 @@ function ProjectModal({
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Integration Instances
+              Instance Tag Filter
             </label>
             <p className="text-xs text-gray-500 mb-3">
-              Add the integrations this project should use. Leave credentials blank to reuse globally configured ones.
-              For AWS, select which accounts are in scope for this project.
+              Define which tagged instances this project uses. Global (untagged) instances are always included.
+              Manage instances on the <a href="/instances" className="text-pdi-sky hover:underline">Instances page</a>.
             </p>
-            <InstanceEditor instances={instances} onChange={setInstances} awsAccounts={awsAccounts} />
+            <TagFilterEditor tagFilter={tagFilter} onChange={setTagFilter} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Resolved Instances
+            </label>
+            <InstancePreviewPanel tagFilter={tagFilter} allInstances={allInstances} />
           </div>
           {error && <p className="text-sm text-red-600">{error}</p>}
         </div>
@@ -318,7 +290,8 @@ function ProjectModal({
   )
 }
 
-export default function Projects({ projects, onReload }: ProjectsProps) {
+export default function Projects({ projects: projectsProp, onReload }: ProjectsProps) {
+  const projects = projectsProp ?? []
   const [editingProject, setEditingProject] = useState<Project | null | undefined>(undefined)
   const [deleting, setDeleting] = useState<string | null>(null)
 
@@ -335,6 +308,14 @@ export default function Projects({ projects, onReload }: ProjectsProps) {
     }
   }
 
+  const filterSummary = (p: Project) => {
+    if (!p.tag_filter || Object.keys(p.tag_filter.tags).length === 0) {
+      return 'Global instances only'
+    }
+    const parts = Object.entries(p.tag_filter.tags).map(([k, v]) => `${k}=${v}`)
+    return `${p.tag_filter.logic}: ${parts.join(', ')}`
+  }
+
   return (
     <div className="h-full overflow-y-auto bg-gray-50">
       <div className="max-w-4xl mx-auto px-6 py-8">
@@ -342,7 +323,7 @@ export default function Projects({ projects, onReload }: ProjectsProps) {
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Projects</h1>
             <p className="text-sm text-gray-500 mt-1">
-              Group integration instances per team or environment. Select a project in the sidebar to scope your chat.
+              Projects use tag filters to select which instances to use. Select a project in the sidebar to scope your chat.
             </p>
           </div>
           <button
@@ -375,27 +356,25 @@ export default function Projects({ projects, onReload }: ProjectsProps) {
                   {p.description && (
                     <p className="text-sm text-gray-500 mt-0.5 truncate">{p.description}</p>
                   )}
-                  <div className="flex flex-wrap gap-1.5 mt-2">
-                    {p.instances.map((inst, i) => (
-                      <span
-                        key={i}
-                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-pdi-sky/10 text-pdi-indigo"
-                      >
-                        {inst.name}
-                        {inst.secret_arn && (
-                          <svg className="w-3 h-3 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                          </svg>
-                        )}
-                        {inst.aws_accounts && inst.aws_accounts.length > 0 && (
-                          <span className="text-amber-600 font-normal">
-                            ({inst.aws_accounts.length} acct{inst.aws_accounts.length !== 1 ? 's' : ''})
+                  <div className="mt-2">
+                    {p.tag_filter && Object.keys(p.tag_filter.tags).length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">
+                          {p.tag_filter.logic}
+                        </span>
+                        {Object.entries(p.tag_filter.tags).map(([k, v]) => (
+                          <span
+                            key={k}
+                            className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-mono bg-pdi-sky/10 text-pdi-indigo"
+                          >
+                            {k}={v}
                           </span>
-                        )}
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-xs text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">
+                        {filterSummary(p)}
                       </span>
-                    ))}
-                    {p.instances.length === 0 && (
-                      <span className="text-xs text-gray-400">No instances configured</span>
                     )}
                   </div>
                 </div>

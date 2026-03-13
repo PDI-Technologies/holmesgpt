@@ -13,18 +13,14 @@ docker build -f infra/Dockerfile.frontend -t $ECR_REGISTRY/holmesgpt:latest .
 docker push $ECR_REGISTRY/holmesgpt:latest
 ```
 
-3. Apply OpenTofu (use `~/.local/bin/tofu`, NOT `terraform`). Extract MCP keys from the live k8s secret and the Anthropic key from Secrets Manager so all values stay in sync:
+3. Apply OpenTofu (use `~/.local/bin/tofu`, NOT `terraform`). Extract ALL keys from the live k8s secret (the authoritative source — Secrets Manager copy may be stale/empty):
 ```bash
 cd infra
 
-# Retrieve Anthropic API key from Secrets Manager (PDI AI Gateway key, format: pdi_...)
-ANTHROPIC_API_KEY=$(aws secretsmanager get-secret-value \
-  --secret-id holmesgpt-dev/anthropic-api-key \
-  --profile pdi-platform-dev --region us-east-1 \
-  --query SecretString --output text \
-  | python3 -c "import sys,json; print(json.load(sys.stdin)['ANTHROPIC_API_KEY'])")
-
-# Extract MCP keys from the live k8s secret
+# Extract ALL keys from the live k8s secret (authoritative source)
+# NOTE: Do NOT read ANTHROPIC_API_KEY from Secrets Manager — that copy can be empty.
+# The k8s secret holmes-api-keys is always up to date.
+ANTHROPIC_API_KEY=$(kubectl get secret holmes-api-keys -n holmesgpt -o jsonpath='{.data.ANTHROPIC_API_KEY}' | base64 -d)
 ADO=$(kubectl get secret holmes-api-keys -n holmesgpt -o jsonpath='{.data.MCP_ADO_API_KEY}' | base64 -d)
 ATLASSIAN=$(kubectl get secret holmes-api-keys -n holmesgpt -o jsonpath='{.data.MCP_ATLASSIAN_API_KEY}' | base64 -d)
 SALESFORCE=$(kubectl get secret holmes-api-keys -n holmesgpt -o jsonpath='{.data.MCP_SALESFORCE_API_KEY}' | base64 -d)

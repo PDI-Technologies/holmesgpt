@@ -1,0 +1,31 @@
+Use this toolset to investigate Salesforce CRM data including cases, accounts, contacts, opportunities, and custom objects.
+
+**SOQL queries:**
+- Always use SOQL for data retrieval — it is the most efficient and precise method
+- Example: `SELECT Id, CaseNumber, Subject, Status, Priority, CreatedDate, Account.Name FROM Case WHERE Status != 'Closed' ORDER BY CreatedDate DESC LIMIT 20`
+- Filter by account: `WHERE Account.Name = 'Acme Corp'`
+- Filter by date range: `WHERE CreatedDate >= 2024-01-01T00:00:00Z AND CreatedDate < 2024-02-01T00:00:00Z`
+- Full-text search: `WHERE Subject LIKE '%payment%' OR Description LIKE '%payment%'`
+- Related objects: Use dot notation — `Account.Name`, `Owner.Email`, `Contact.Phone`
+
+**Case investigation workflow:**
+1. Fetch the case by ID or case number: `SELECT Id, CaseNumber, Subject, Description, Status, Priority, Type, Origin, CreatedDate, ClosedDate, Account.Name, Contact.Name, Owner.Name FROM Case WHERE CaseNumber = '00001234'`
+2. Check case comments: `SELECT Id, CommentBody, CreatedDate, CreatedBy.Name FROM CaseComment WHERE ParentId = '<case-id>' ORDER BY CreatedDate ASC`
+3. Check case history: `SELECT Id, Field, OldValue, NewValue, CreatedDate FROM CaseHistory WHERE CaseId = '<case-id>' ORDER BY CreatedDate ASC`
+4. Look for related cases on the same account: `SELECT Id, CaseNumber, Subject, Status FROM Case WHERE AccountId = '<account-id>' AND Id != '<case-id>' ORDER BY CreatedDate DESC LIMIT 10`
+
+**Account and contact lookup:**
+- Find account: `SELECT Id, Name, Type, Industry, AnnualRevenue, Phone, BillingCity FROM Account WHERE Name LIKE '%<company>%' LIMIT 10`
+- Find contacts: `SELECT Id, Name, Email, Phone, Title, AccountId FROM Contact WHERE AccountId = '<account-id>'`
+- Find opportunities: `SELECT Id, Name, StageName, Amount, CloseDate, Probability FROM Opportunity WHERE AccountId = '<account-id>' ORDER BY CloseDate DESC LIMIT 10`
+
+**Custom objects:**
+- Query custom objects using their API name (ends in `__c`): `SELECT Id, Name, Status__c FROM My_Custom_Object__c WHERE Status__c = 'Active' LIMIT 20`
+- Use `DESCRIBE` or schema tools to discover available fields on custom objects
+
+**Best practices:**
+- Always include `LIMIT` in SOQL queries — default to 20 records to avoid token overflow
+- Use `ORDER BY CreatedDate DESC` to get the most recent records first
+- When investigating a case, always fetch comments and history to understand the full timeline
+- Include `CreatedDate` and `LastModifiedDate` in queries to understand when records changed
+- For large text fields (Description, Comments), they may be truncated — note this in your response

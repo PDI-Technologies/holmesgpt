@@ -286,3 +286,6 @@ class InternetToolset(InternetBaseToolset):
             ],
             is_default=True,
         )
+        self._load_llm_instructions_from_file(
+            os.path.dirname(__file__), "internet_instructions.jinja2"
+        )

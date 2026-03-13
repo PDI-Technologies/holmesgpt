@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { api, type AwsAccount, type LlmInstructionsEntry } from '../lib/api'
+import { api, type AwsAccount, type LlmInstructionsEntry, type WebhookInfo } from '../lib/api'
 
 interface StatusCheck {
   label: string
@@ -242,6 +242,7 @@ export default function Settings() {
   ])
   const [awsAccounts, setAwsAccounts] = useState<AwsAccount[]>([])
   const [irsaRole, setIrsaRole] = useState('')
+  const [webhooks, setWebhooks] = useState<WebhookInfo[]>([])
 
   // LLM Instructions state
   const [llmIntegrations, setLlmIntegrations] = useState<LlmInstructionsEntry[]>([])
@@ -307,6 +308,10 @@ export default function Settings() {
     api.getAwsAccounts().then((data) => {
       setAwsAccounts(data.accounts)
       setIrsaRole(data.irsa_role)
+    }).catch(() => {})
+
+    api.getWebhooks().then((data) => {
+      setWebhooks(data.webhooks)
     }).catch(() => {})
 
     loadLlmInstructions()
@@ -431,6 +436,58 @@ export default function Settings() {
               )}
             </div>
           )}
+
+          {/* Webhooks */}
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-6 h-6 rounded-md bg-pdi-sky/10 flex items-center justify-center">
+                <svg className="w-3.5 h-3.5 text-pdi-sky" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                </svg>
+              </div>
+              <h3 className="text-sm font-semibold text-pdi-granite">Webhooks</h3>
+            </div>
+            {webhooks.length === 0 ? (
+              <p className="text-xs text-pdi-slate">Loading webhook configuration...</p>
+            ) : (
+              <div className="space-y-3">
+                {webhooks.map((wh) => (
+                  <div key={wh.id} className="border border-gray-100 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-pdi-granite">{wh.name}</span>
+                        <span className="text-xs bg-gray-100 text-pdi-slate px-2 py-0.5 rounded-full">{wh.auth_type}</span>
+                        <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full">{wh.trigger}</span>
+                      </div>
+                      {wh.configured ? (
+                        <span className="text-xs bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded-full">Configured</span>
+                      ) : (
+                        <span className="text-xs bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full">Not configured</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <code className="text-xs font-mono text-pdi-slate bg-gray-50 border border-gray-100 rounded px-2 py-1 flex-1 truncate">{wh.url}</code>
+                      <button
+                        onClick={() => navigator.clipboard.writeText(wh.url)}
+                        className="text-xs text-pdi-slate hover:text-pdi-granite px-2 py-1 rounded border border-gray-200 hover:border-pdi-slate transition-colors shrink-0"
+                        title="Copy URL"
+                      >
+                        Copy
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {Object.entries(wh.vars).map(([varName, isSet]) => (
+                        <div key={varName} className="flex items-center gap-1.5">
+                          <span className={`w-2 h-2 rounded-full shrink-0 ${isSet ? 'bg-green-500' : 'bg-gray-300'}`} />
+                          <span className={`text-xs font-mono ${isSet ? 'text-pdi-granite' : 'text-pdi-slate'}`}>{varName}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
           {/* LLM Instructions */}
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm">

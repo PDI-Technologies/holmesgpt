@@ -1,0 +1,34 @@
+Use this toolset to investigate issues using Jira and Confluence (Atlassian suite).
+
+**Jira — issue queries (JQL):**
+- Always prefer JQL for Jira searches — it is the most powerful and precise query method
+- Example: `project = OPS AND issuetype = Incident AND status != Done AND created >= -7d ORDER BY created DESC`
+- Filter by label: `labels = "payment-service"`
+- Filter by component: `component = "checkout-api"`
+- Filter by priority: `priority in (Critical, High)`
+- Filter by assignee: `assignee = currentUser()` or `assignee = "user@company.com"`
+- Filter by fix version: `fixVersion = "2024.Q4.1"`
+- Full-text search: `text ~ "database connection timeout"`
+
+**Jira — common investigation patterns:**
+- Find open incidents for a service: `project = OPS AND issuetype = Incident AND labels = "<service-name>" AND status != Done`
+- Find recently closed incidents: `project = OPS AND issuetype = Incident AND status = Done AND resolved >= -24h`
+- Find related bugs: `project = <project> AND issuetype = Bug AND component = "<component>" AND status != Done`
+- Find work linked to a deployment: `fixVersion = "<version>" AND status != Done`
+
+**Confluence — page search:**
+- Search for runbooks: use CQL `space = OPS AND label = "runbook" AND title ~ "<service-name>"`
+- Search by text content: `text ~ "incident response" AND space = OPS`
+- Fetch a specific page by ID when you have the URL (extract the numeric ID from the URL path)
+- Always use `expand=body.storage` when fetching page content to get the full text
+
+**Cross-referencing Jira and Confluence:**
+- When investigating an incident, search Confluence for runbooks related to the affected service
+- Check Jira for previous incidents with the same symptoms to find known solutions
+- Look for post-mortem documents in Confluence linked to similar past incidents
+
+**Best practices:**
+- Scope JQL queries to specific projects to avoid searching the entire Jira instance
+- Use `maxResults=20` to limit response size — increase only if needed
+- When a Jira issue has a Confluence page linked, fetch that page for additional context
+- Check the `comment` field on Jira issues for investigation notes from previous responders
