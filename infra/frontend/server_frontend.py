@@ -52,7 +52,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
     """Protect ALL routes with session cookie or API key auth."""
 
     # Only these paths are exempt from auth
-    EXEMPT_PATHS = ("/healthz", "/readyz", "/auth/login")
+    EXEMPT_PATHS = ("/healthz", "/readyz", "/auth/login", "/auth/check", "/login")
     # Static asset prefixes that must be accessible for the SPA to load
     EXEMPT_PREFIXES = ("/assets/", "/favicon")
 
@@ -116,6 +116,27 @@ def _restore_llm_overrides_from_dynamodb(config) -> None:
         logging.warning("Failed to restore LLM overrides from DynamoDB", exc_info=True)
 
 
+def _restore_toolset_state_from_dynamodb(config) -> None:
+    """Load persisted toolset enable/disable state from DynamoDB into the in-memory config."""
+    if config is None:
+        return
+    table_name = os.environ.get("HOLMES_DYNAMODB_TABLE", "")
+    if not table_name:
+        return
+    try:
+        from projects import get_toolset_state_store  # noqa: PLC0415
+
+        states = get_toolset_state_store().load_all()
+        for toolset_name, enabled in states.items():
+            if config.toolsets is None:
+                config.toolsets = {}
+            config.toolsets.setdefault(toolset_name, {})["enabled"] = enabled
+        if states:
+            logging.info("Restored %d toolset state(s) from DynamoDB", len(states))
+    except Exception:
+        logging.warning("Failed to restore toolset states from DynamoDB", exc_info=True)
+
+
 def mount_frontend(app: FastAPI, config=None) -> None:
     """Add auth endpoints, integrations API, and static file serving to the FastAPI app."""
 
@@ -130,8 +151,9 @@ def mount_frontend(app: FastAPI, config=None) -> None:
         app.add_middleware(AuthMiddleware)
         logging.info("Auth middleware enabled - all routes require authentication")
 
-    # ── DynamoDB persistence: restore LLM instruction overrides on startup ────
+    # ── DynamoDB persistence: restore state on startup ────────────────────────
     _restore_llm_overrides_from_dynamodb(config)
+    _restore_toolset_state_from_dynamodb(config)
 
     @app.get("/auth/check")
     async def auth_check(request: Request):
@@ -321,6 +343,14 @@ def mount_frontend(app: FastAPI, config=None) -> None:
             config.toolsets[name] = {}
         config.toolsets[name]["enabled"] = enabled
 
+        # Persist to DynamoDB so the state survives pod restarts
+        try:
+            from projects import get_toolset_state_store  # noqa: PLC0415
+
+            get_toolset_state_store().save(name, enabled)
+        except Exception:
+            logging.warning("Failed to persist toolset state to DynamoDB", exc_info=True)
+
         # Hot-reload: force re-creation of tool executor with updated config
         try:
             config._toolset_manager = None
@@ -359,6 +389,13 @@ def mount_frontend(app: FastAPI, config=None) -> None:
 
         if enabled is not None:
             config.toolsets[name]["enabled"] = enabled
+            # Persist enabled state to DynamoDB so it survives pod restarts
+            try:
+                from projects import get_toolset_state_store  # noqa: PLC0415
+
+                get_toolset_state_store().save(name, enabled)
+            except Exception:
+                logging.warning("Failed to persist toolset state to DynamoDB", exc_info=True)
 
         # Hot-reload
         try:

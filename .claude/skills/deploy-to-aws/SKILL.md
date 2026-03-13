@@ -71,31 +71,55 @@ docker buildx build \
 
 ---
 
-## Step 3: Deploy with Terraform
+## Step 3: Deploy with OpenTofu
+
+Use `~/.local/bin/tofu` — **NOT** `terraform`. Extract MCP keys from the live k8s secret and the Anthropic key from Secrets Manager so all values stay in sync:
 
 ```bash
 cd infra
 
-# Required: set sensitive vars via environment
-export TF_VAR_anthropic_api_key="your-anthropic-api-key"
-export TF_VAR_mcp_ado_api_key="your-ado-api-key"
-export TF_VAR_mcp_atlassian_api_key="your-atlassian-api-key"
-export TF_VAR_mcp_salesforce_api_key="your-salesforce-api-key"
+# Retrieve Anthropic API key from Secrets Manager (PDI AI Gateway key, format: pdi_...)
+ANTHROPIC_API_KEY=$(aws secretsmanager get-secret-value \
+  --secret-id holmesgpt-dev/anthropic-api-key \
+  --profile pdi-platform-dev --region us-east-1 \
+  --query SecretString --output text \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['ANTHROPIC_API_KEY'])")
+
+# Extract MCP keys from the live k8s secret (avoids silent empty-string drift)
+ADO=$(kubectl get secret holmes-api-keys -n holmesgpt -o jsonpath='{.data.MCP_ADO_API_KEY}' | base64 -d)
+ATLASSIAN=$(kubectl get secret holmes-api-keys -n holmesgpt -o jsonpath='{.data.MCP_ATLASSIAN_API_KEY}' | base64 -d)
+SALESFORCE=$(kubectl get secret holmes-api-keys -n holmesgpt -o jsonpath='{.data.MCP_SALESFORCE_API_KEY}' | base64 -d)
 
 # Plan first
-terraform plan -var-file=envs/dev.tfvars
+~/.local/bin/tofu plan -var-file=envs/dev.tfvars \
+  -var="anthropic_api_key=$ANTHROPIC_API_KEY" \
+  -var="mcp_ado_api_key=$ADO" \
+  -var="mcp_atlassian_api_key=$ATLASSIAN" \
+  -var="mcp_salesforce_api_key=$SALESFORCE"
 
 # Apply (creates/updates DynamoDB table, IAM policies, Helm release, etc.)
-terraform apply -var-file=envs/dev.tfvars
+~/.local/bin/tofu apply -var-file=envs/dev.tfvars \
+  -var="anthropic_api_key=$ANTHROPIC_API_KEY" \
+  -var="mcp_ado_api_key=$ADO" \
+  -var="mcp_atlassian_api_key=$ATLASSIAN" \
+  -var="mcp_salesforce_api_key=$SALESFORCE" \
+  -auto-approve
 ```
 
 If only the application config changed (not infrastructure), you can target just the Helm release:
 
 ```bash
-terraform apply -var-file=envs/dev.tfvars -target=helm_release.holmes
+~/.local/bin/tofu apply -var-file=envs/dev.tfvars \
+  -var="anthropic_api_key=$ANTHROPIC_API_KEY" \
+  -var="mcp_ado_api_key=$ADO" \
+  -var="mcp_atlassian_api_key=$ATLASSIAN" \
+  -var="mcp_salesforce_api_key=$SALESFORCE" \
+  -target=helm_release.holmes -auto-approve
 ```
 
 **Note**: The DynamoDB table (`holmesgpt-dev-config`) is created by `infra/dynamodb.tf`. It stores projects and LLM instruction overrides. The table name is injected into the pod as `HOLMES_DYNAMODB_TABLE` env var.
+
+**Important**: Always extract MCP keys from the live k8s secret rather than using environment variables. If empty strings are passed as `-var` values, the `helm.tf` conditional (`local.mcp_keys["MCP_ADO_API_KEY"] != ""`) evaluates to false and the entire `mcp_servers` block renders as `{}` — removing all MCP integrations from the pod configmap.
 
 ---
 
@@ -179,11 +203,11 @@ Common causes:
 - Python import error in new code
 - Port conflict (check if port 5050 is already in use)
 
-### Terraform state lock
+### OpenTofu state lock
 
 ```bash
-# If terraform apply hangs on "Acquiring state lock"
-terraform force-unlock <LOCK_ID> -force
+# If tofu apply hangs on "Acquiring state lock"
+~/.local/bin/tofu force-unlock <LOCK_ID> -force
 ```
 
 ### Frontend not loading (404 on `/`)

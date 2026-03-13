@@ -140,6 +140,35 @@ def get_llm_store() -> LLMInstructionsStore:
     return _llm_store
 
 
+# ── Toolset enable/disable state store ─────────────────────────────────────────
+
+
+class ToolsetStateStore:
+    """Persist toolset enabled/disabled state across pod restarts."""
+
+    def load_all(self) -> dict[str, bool]:
+        """Return {toolset_name: enabled} for all stored state overrides."""
+        resp = _get_table().query(
+            KeyConditionExpression=Key("pk").eq("TOOLSET_STATE"),
+        )
+        return {item["sk"]: item["enabled"] for item in resp.get("Items", [])}
+
+    def save(self, toolset_name: str, enabled: bool) -> None:
+        _get_table().put_item(
+            Item={"pk": "TOOLSET_STATE", "sk": toolset_name, "enabled": enabled}
+        )
+
+    def delete(self, toolset_name: str) -> None:
+        _get_table().delete_item(Key={"pk": "TOOLSET_STATE", "sk": toolset_name})
+
+
+_toolset_state_store = ToolsetStateStore()
+
+
+def get_toolset_state_store() -> ToolsetStateStore:
+    return _toolset_state_store
+
+
 # ── Per-project tool executor ──────────────────────────────────────────────────
 
 

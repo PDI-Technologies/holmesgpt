@@ -11,7 +11,11 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   });
 
   if (res.status === 401) {
-    window.location.href = '/login';
+    // Only redirect to login if we're not already on the login page
+    const onLoginPage = window.location.pathname === '/auth/login' || window.location.pathname === '/login';
+    if (!onLoginPage) {
+      window.location.href = '/auth/login';
+    }
     throw new Error('Unauthorized');
   }
 

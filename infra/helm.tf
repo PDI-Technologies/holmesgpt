@@ -3,6 +3,7 @@ locals {
   mcp_keys  = jsondecode(data.aws_secretsmanager_secret_version.mcp_api_keys.secret_string)
   ui_creds  = jsondecode(data.aws_secretsmanager_secret_version.holmes_ui_credentials.secret_string)
   grafana   = jsondecode(data.aws_secretsmanager_secret_version.grafana.secret_string)
+  datadog   = jsondecode(data.aws_secretsmanager_secret_version.datadog.secret_string)
 }
 
 # Kubernetes namespace for Holmes
@@ -31,6 +32,9 @@ resource "kubernetes_secret" "holmes_api_keys" {
     MCP_SALESFORCE_API_KEY = local.mcp_keys["MCP_SALESFORCE_API_KEY"]
     GRAFANA_API_KEY        = local.grafana["GRAFANA_API_KEY"]
     GRAFANA_URL            = local.grafana["GRAFANA_URL"]
+    DATADOG_API_KEY        = local.datadog["DATADOG_API_KEY"]
+    DATADOG_APP_KEY        = local.datadog["DATADOG_APP_KEY"]
+    DATADOG_API_URL        = local.datadog["DATADOG_API_URL"]
   }
 
   type = "Opaque"
@@ -145,6 +149,33 @@ resource "helm_release" "holmes" {
           }
         },
         {
+          name = "DATADOG_API_KEY"
+          valueFrom = {
+            secretKeyRef = {
+              name = kubernetes_secret.holmes_api_keys.metadata[0].name
+              key  = "DATADOG_API_KEY"
+            }
+          }
+        },
+        {
+          name = "DATADOG_APP_KEY"
+          valueFrom = {
+            secretKeyRef = {
+              name = kubernetes_secret.holmes_api_keys.metadata[0].name
+              key  = "DATADOG_APP_KEY"
+            }
+          }
+        },
+        {
+          name = "DATADOG_API_URL"
+          valueFrom = {
+            secretKeyRef = {
+              name = kubernetes_secret.holmes_api_keys.metadata[0].name
+              key  = "DATADOG_API_URL"
+            }
+          }
+        },
+        {
           name  = "AWS_MCP_ACCOUNTS"
           value = jsonencode([
             for name, cfg in var.logistics_accounts : {
@@ -184,6 +215,54 @@ resource "helm_release" "holmes" {
           config  = {
             api_url = "{{ env.GRAFANA_URL }}"
             api_key = "{{ env.GRAFANA_API_KEY }}"
+          }
+        }
+        "datadog/metrics" = {
+          enabled = true
+          config  = {
+            api_url = "{{ env.DATADOG_API_URL }}"
+            api_key = "{{ env.DATADOG_API_KEY }}"
+            app_key = "{{ env.DATADOG_APP_KEY }}"
+          }
+        }
+        "datadog/logs" = {
+          enabled = true
+          config  = {
+            api_url = "{{ env.DATADOG_API_URL }}"
+            api_key = "{{ env.DATADOG_API_KEY }}"
+            app_key = "{{ env.DATADOG_APP_KEY }}"
+          }
+        }
+        "datadog/monitors" = {
+          enabled = true
+          config  = {
+            api_url = "{{ env.DATADOG_API_URL }}"
+            api_key = "{{ env.DATADOG_API_KEY }}"
+            app_key = "{{ env.DATADOG_APP_KEY }}"
+          }
+        }
+        "datadog/events" = {
+          enabled = true
+          config  = {
+            api_url = "{{ env.DATADOG_API_URL }}"
+            api_key = "{{ env.DATADOG_API_KEY }}"
+            app_key = "{{ env.DATADOG_APP_KEY }}"
+          }
+        }
+        "datadog/general" = {
+          enabled = true
+          config  = {
+            api_url = "{{ env.DATADOG_API_URL }}"
+            api_key = "{{ env.DATADOG_API_KEY }}"
+            app_key = "{{ env.DATADOG_APP_KEY }}"
+          }
+        }
+        "datadog/traces" = {
+          enabled = true
+          config  = {
+            api_url = "{{ env.DATADOG_API_URL }}"
+            api_key = "{{ env.DATADOG_API_KEY }}"
+            app_key = "{{ env.DATADOG_APP_KEY }}"
           }
         }
         "bash" = {

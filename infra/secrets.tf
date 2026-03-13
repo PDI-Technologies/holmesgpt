@@ -73,3 +73,12 @@ data "aws_secretsmanager_secret_version" "holmes_ui_credentials" {
   secret_id  = aws_secretsmanager_secret.holmes_ui_credentials.id
   depends_on = [aws_secretsmanager_secret_version.holmes_ui_credentials]
 }
+
+# Datadog secret — created manually in Secrets Manager (holmesgpt-dev/datadog)
+data "aws_secretsmanager_secret" "datadog" {
+  name = "${local.cluster_name}/datadog"
+}
+
+data "aws_secretsmanager_secret_version" "datadog" {
+  secret_id = data.aws_secretsmanager_secret.datadog.id
+}
