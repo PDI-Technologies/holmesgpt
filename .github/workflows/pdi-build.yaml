@@ -1,9 +1,9 @@
 # Build and push the HolmesGPT Docker image to PDI ECR on every PR.
-# For same-repo PRs: build + push (tagged by commit SHA).
+# For same-repo PRs: build + push to dev ECR (tagged by commit SHA).
 # For fork PRs: build only (no push — no AWS credentials available).
 #
 # The image is NOT deployed here — deployment happens in pdi-deploy.yaml
-# which is triggered manually or on merge to main.
+# which is triggered on merge to main (dev) or push to release/** (prod).
 
 name: PDI — Build
 
@@ -26,10 +26,10 @@ concurrency:
 
 env:
   AWS_REGION: us-east-1
+  # Dev ECR — used for PR builds (prod ECR is only used at deploy time)
   ECR_REGISTRY: 717423812395.dkr.ecr.us-east-1.amazonaws.com
   ECR_REPOSITORY: holmesgpt
   IMAGE_TAG: ${{ github.sha }}
-  SHORT_SHA: ${{ github.sha != '' && github.sha || 'unknown' }}
 
 jobs:
   build:
@@ -64,7 +64,7 @@ jobs:
         id: sha
         run: echo "short=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
 
-      - name: Build (and push if same-repo)
+      - name: Build (and push to dev ECR if same-repo)
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -103,6 +103,7 @@ jobs:
               `\`\`\``,
               ``,
               `> ⚠️ This is a PR image — it will be overwritten on next deploy to \`main\`.`,
+              `> To deploy to **prod**, merge to \`main\` then create a \`release/x.y.z\` branch.`,
             ].join('\n');
 
             // Delete previous bot comments for this PR
@@ -133,11 +134,13 @@ jobs:
           echo "## PDI Build Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           if [ "$SHOULD_PUSH" = "true" ]; then
-            echo "✅ **Image pushed to ECR**" >> $GITHUB_STEP_SUMMARY
+            echo "✅ **Image pushed to dev ECR**" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "- Registry: \`$ECR_REGISTRY\`" >> $GITHUB_STEP_SUMMARY
             echo "- Repository: \`$ECR_REPOSITORY\`" >> $GITHUB_STEP_SUMMARY
             echo "- Tag: \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "> Prod ECR push happens automatically at deploy time (push to \`release/**\`)." >> $GITHUB_STEP_SUMMARY
           else
             echo "🔨 **Image built (not pushed — fork PR)**" >> $GITHUB_STEP_SUMMARY
           fi

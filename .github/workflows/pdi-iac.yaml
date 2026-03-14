@@ -1,40 +1,61 @@
 # OpenTofu IaC workflow for the PDI HolmesGPT infrastructure.
 #
+# Environments:
+#   dev  — pdi-platform-dev  (account 717423812395)  — deploys on push to main
+#   prod — pdi-platform-production                   — deploys on push to release/** or workflow_dispatch
+#
 # On pull_request (infra/** changes):
-#   - Runs `tofu plan` and posts the plan diff as a PR comment
+#   - Runs `tofu plan` for BOTH environments and posts the plan diff as a PR comment
 #
 # On push to main (infra/** changes):
-#   - Runs `tofu apply` to converge infrastructure
+#   - Runs `tofu apply` for dev only
+#
+# On push to release/** (infra/** changes):
+#   - Runs `tofu apply` for prod only
 #
 # State management:
 #   This workflow uses an S3 backend for remote state so that CI and local
 #   development share the same state file.
 #
-#   One-time setup (run locally before first CI apply):
+#   Dev state:  s3://holmesgpt-tfstate-717423812395/holmesgpt/dev/terraform.tfstate
+#   Prod state: s3://holmesgpt-tfstate-<PROD_ACCOUNT_ID>/holmesgpt/prod/terraform.tfstate
+#
+#   One-time setup per environment (run locally before first CI apply):
 #     aws s3api create-bucket \
-#       --bucket holmesgpt-tfstate-717423812395 \
+#       --bucket holmesgpt-tfstate-<ACCOUNT_ID> \
 #       --region us-east-1 \
-#       --profile pdi-platform-dev
+#       --profile <PROFILE>
 #     aws s3api put-bucket-versioning \
-#       --bucket holmesgpt-tfstate-717423812395 \
+#       --bucket holmesgpt-tfstate-<ACCOUNT_ID> \
 #       --versioning-configuration Status=Enabled \
-#       --profile pdi-platform-dev
+#       --profile <PROFILE>
 #     aws s3api put-bucket-encryption \
-#       --bucket holmesgpt-tfstate-717423812395 \
+#       --bucket holmesgpt-tfstate-<ACCOUNT_ID> \
 #       --server-side-encryption-configuration \
 #         '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}' \
-#       --profile pdi-platform-dev
+#       --profile <PROFILE>
 #
-#   Then uncomment the S3 backend block in infra/main.tf and run:
-#     cd infra && tofu init -migrate-state -var-file=envs/dev.tfvars
+#   Then init with the appropriate backend config:
+#     cd infra && tofu init -backend-config=envs/backend-dev.hcl   # dev
+#     cd infra && tofu init -backend-config=envs/backend-prod.hcl  # prod
 #
-# Required GitHub Secrets:
-#   PDI_AWS_ACCESS_KEY_ID          — IAM access key
-#   PDI_AWS_SECRET_ACCESS_KEY      — IAM secret key
-#   PDI_ANTHROPIC_API_KEY          — Anthropic API key for Holmes
-#   PDI_MCP_ADO_API_KEY            — Azure DevOps PAT
-#   PDI_MCP_ATLASSIAN_API_KEY      — Atlassian API key
-#   PDI_MCP_SALESFORCE_API_KEY     — Salesforce API key
+# Required GitHub Secrets (repository-level):
+#   PDI_AWS_ACCESS_KEY_ID          — dev IAM access key
+#   PDI_AWS_SECRET_ACCESS_KEY      — dev IAM secret key
+#   PDI_ANTHROPIC_API_KEY          — Anthropic API key for Holmes (dev)
+#   PDI_MCP_ADO_API_KEY            — Azure DevOps PAT (dev)
+#   PDI_MCP_ATLASSIAN_API_KEY      — Atlassian API key (dev)
+#   PDI_MCP_SALESFORCE_API_KEY     — Salesforce API key (dev)
+#
+# Required GitHub Secrets (prod environment — configure under Settings > Environments > prod):
+#   PDI_PROD_AWS_ACCESS_KEY_ID     — prod IAM access key
+#   PDI_PROD_AWS_SECRET_ACCESS_KEY — prod IAM secret key
+#   PDI_PROD_ANTHROPIC_API_KEY     — Anthropic API key for Holmes (prod)
+#   PDI_PROD_MCP_ADO_API_KEY       — Azure DevOps PAT (prod)
+#   PDI_PROD_MCP_ATLASSIAN_API_KEY — Atlassian API key (prod)
+#   PDI_PROD_MCP_SALESFORCE_API_KEY — Salesforce API key (prod)
+#   PDI_PROD_TF_STATE_BUCKET       — S3 bucket name for prod state (holmesgpt-tfstate-<PROD_ACCOUNT_ID>)
+#   PDI_PROD_ECR_REGISTRY          — ECR registry URL (<PROD_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com)
 
 name: PDI — IaC
 
@@ -48,11 +69,20 @@ on:
   push:
     branches:
       - main
+      - 'release/**'
     paths:
       - 'infra/**'
       - '!infra/frontend/**'
   workflow_dispatch:
     inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - prod
       action:
         description: 'Action to run (plan/apply)'
         required: true
@@ -68,18 +98,52 @@ concurrency:
 
 env:
   AWS_REGION: us-east-1
-  TF_STATE_BUCKET: holmesgpt-tfstate-717423812395
-  TF_STATE_KEY: holmesgpt/dev/terraform.tfstate
   TOFU_VERSION: "1.9.1"
 
 jobs:
-  iac:
-    name: OpenTofu ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') && 'apply' || (github.event.inputs.action == 'apply' && 'apply') || 'plan' }}
+  # ── Determine which environments to run ──────────────────────────────────────
+  setup:
+    name: Determine environments
     runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - name: Build environment matrix
+        id: matrix
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            # Manual dispatch: run only the selected environment
+            ENV="${{ github.event.inputs.environment }}"
+            echo "matrix={\"include\":[{\"env\":\"$ENV\"}]}" >> $GITHUB_OUTPUT
 
-    # Determine whether to apply or just plan
+          elif [ "${{ github.event_name }}" = "pull_request" ]; then
+            # PRs: plan both environments
+            echo 'matrix={"include":[{"env":"dev"},{"env":"prod"}]}' >> $GITHUB_OUTPUT
+
+          elif [[ "${{ github.ref }}" == refs/heads/release/* ]]; then
+            # release/** branch push: apply prod only
+            echo 'matrix={"include":[{"env":"prod"}]}' >> $GITHUB_OUTPUT
+
+          else
+            # push to main: apply dev only
+            echo 'matrix={"include":[{"env":"dev"}]}' >> $GITHUB_OUTPUT
+          fi
+
+  # ── IaC plan/apply per environment ───────────────────────────────────────────
+  iac:
+    name: OpenTofu ${{ matrix.env }} — ${{ (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release/'))) && 'apply' || (github.event.inputs.action == 'apply' && 'apply') || 'plan' }}
+    needs: setup
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
+
+    # Use GitHub Environment for prod (enables environment protection rules and separate secrets)
+    environment: ${{ matrix.env == 'prod' && 'prod' || '' }}
+
     env:
-      RUN_APPLY: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event.inputs.action == 'apply' }}
+      IS_PROD: ${{ matrix.env == 'prod' }}
+      RUN_APPLY: ${{ (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release/'))) || github.event.inputs.action == 'apply' }}
 
     permissions:
       contents: read
@@ -89,14 +153,41 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # ── Resolve per-environment config ───────────────────────────────────────
+
+      - name: Set environment variables
+        id: env-config
+        run: |
+          if [ "${{ matrix.env }}" = "prod" ]; then
+            echo "AWS_ACCESS_KEY_ID=${{ secrets.PDI_PROD_AWS_ACCESS_KEY_ID }}" >> $GITHUB_ENV
+            echo "AWS_SECRET_ACCESS_KEY=${{ secrets.PDI_PROD_AWS_SECRET_ACCESS_KEY }}" >> $GITHUB_ENV
+            echo "TF_STATE_BUCKET=${{ secrets.PDI_PROD_TF_STATE_BUCKET }}" >> $GITHUB_ENV
+            echo "TF_STATE_KEY=holmesgpt/prod/terraform.tfstate" >> $GITHUB_ENV
+            echo "TF_VARFILE=envs/prod.tfvars" >> $GITHUB_ENV
+            echo "ANTHROPIC_API_KEY=${{ secrets.PDI_PROD_ANTHROPIC_API_KEY }}" >> $GITHUB_ENV
+            echo "MCP_ADO_API_KEY=${{ secrets.PDI_PROD_MCP_ADO_API_KEY }}" >> $GITHUB_ENV
+            echo "MCP_ATLASSIAN_API_KEY=${{ secrets.PDI_PROD_MCP_ATLASSIAN_API_KEY }}" >> $GITHUB_ENV
+            echo "MCP_SALESFORCE_API_KEY=${{ secrets.PDI_PROD_MCP_SALESFORCE_API_KEY }}" >> $GITHUB_ENV
+          else
+            echo "AWS_ACCESS_KEY_ID=${{ secrets.PDI_AWS_ACCESS_KEY_ID }}" >> $GITHUB_ENV
+            echo "AWS_SECRET_ACCESS_KEY=${{ secrets.PDI_AWS_SECRET_ACCESS_KEY }}" >> $GITHUB_ENV
+            echo "TF_STATE_BUCKET=holmesgpt-tfstate-717423812395" >> $GITHUB_ENV
+            echo "TF_STATE_KEY=holmesgpt/dev/terraform.tfstate" >> $GITHUB_ENV
+            echo "TF_VARFILE=envs/dev.tfvars" >> $GITHUB_ENV
+            echo "ANTHROPIC_API_KEY=${{ secrets.PDI_ANTHROPIC_API_KEY }}" >> $GITHUB_ENV
+            echo "MCP_ADO_API_KEY=${{ secrets.PDI_MCP_ADO_API_KEY }}" >> $GITHUB_ENV
+            echo "MCP_ATLASSIAN_API_KEY=${{ secrets.PDI_MCP_ATLASSIAN_API_KEY }}" >> $GITHUB_ENV
+            echo "MCP_SALESFORCE_API_KEY=${{ secrets.PDI_MCP_SALESFORCE_API_KEY }}" >> $GITHUB_ENV
+          fi
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.PDI_AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.PDI_AWS_SECRET_ACCESS_KEY }}
+          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # ── Install OpenTofu ─────────────────────────────────────────────────────
+      # ── Install OpenTofu ──────────────────────────────────────────────────────
 
       - name: Install OpenTofu ${{ env.TOFU_VERSION }}
         run: |
@@ -104,18 +195,17 @@ jobs:
             sudo env OPENTOFU_VERSION=${{ env.TOFU_VERSION }} bash -s -- --install-method deb
           tofu version
 
-      # ── Update kubeconfig (needed by helm/kubernetes providers) ─────────────
+      # ── Update kubeconfig (needed by helm/kubernetes providers) ──────────────
 
       - name: Update kubeconfig for EKS
         run: |
+          CLUSTER_NAME="holmesgpt-${{ matrix.env }}"
           aws eks update-kubeconfig \
-            --name holmesgpt-dev \
+            --name "$CLUSTER_NAME" \
             --region ${{ env.AWS_REGION }}
 
-      # ── Configure backend ────────────────────────────────────────────────────
+      # ── Configure backend ─────────────────────────────────────────────────────
       # We inject the S3 backend config at init time using -backend-config flags.
-      # This avoids hardcoding credentials in main.tf and works whether the
-      # backend block in main.tf is "s3" or left as local (tofu will override).
 
       - name: OpenTofu init
         working-directory: infra
@@ -127,22 +217,21 @@ jobs:
             -backend-config="encrypt=true" \
             -reconfigure
         env:
-          # Suppress profile lookup — credentials come from env vars set by configure-aws-credentials
           AWS_PROFILE: ""
 
-      # ── Plan ─────────────────────────────────────────────────────────────────
+      # ── Plan ──────────────────────────────────────────────────────────────────
 
-      - name: OpenTofu plan
+      - name: OpenTofu plan (${{ matrix.env }})
         id: plan
         working-directory: infra
         run: |
           tofu plan \
-            -var-file=envs/dev.tfvars \
+            -var-file="${{ env.TF_VARFILE }}" \
             -var="aws_profile=" \
-            -var="anthropic_api_key=${{ secrets.PDI_ANTHROPIC_API_KEY }}" \
-            -var="mcp_ado_api_key=${{ secrets.PDI_MCP_ADO_API_KEY }}" \
-            -var="mcp_atlassian_api_key=${{ secrets.PDI_MCP_ATLASSIAN_API_KEY }}" \
-            -var="mcp_salesforce_api_key=${{ secrets.PDI_MCP_SALESFORCE_API_KEY }}" \
+            -var="anthropic_api_key=${{ env.ANTHROPIC_API_KEY }}" \
+            -var="mcp_ado_api_key=${{ env.MCP_ADO_API_KEY }}" \
+            -var="mcp_atlassian_api_key=${{ env.MCP_ATLASSIAN_API_KEY }}" \
+            -var="mcp_salesforce_api_key=${{ env.MCP_SALESFORCE_API_KEY }}" \
             -out=tfplan \
             -no-color \
             2>&1 | tee /tmp/plan_output.txt
@@ -158,14 +247,15 @@ jobs:
         env:
           AWS_PROFILE: ""
 
-      # ── Post plan as PR comment ──────────────────────────────────────────────
+      # ── Post plan as PR comment ───────────────────────────────────────────────
 
-      - name: Post plan to PR
+      - name: Post plan to PR (${{ matrix.env }})
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
+            const env = '${{ matrix.env }}';
             const planOutput = fs.readFileSync('/tmp/plan_output.txt', 'utf8');
 
             // Truncate if too long for a GitHub comment (65535 char limit)
@@ -174,8 +264,9 @@ jobs:
               ? planOutput.slice(0, MAX_LEN) + '\n\n... (truncated — see workflow logs for full output)'
               : planOutput;
 
+            const envEmoji = env === 'prod' ? '🚀' : '🔧';
             const body = [
-              `### 🏗️ OpenTofu Plan`,
+              `### ${envEmoji} OpenTofu Plan — \`${env}\``,
               ``,
               `<details><summary>Show plan</summary>`,
               ``,
@@ -184,17 +275,17 @@ jobs:
               `\`\`\``,
               `</details>`,
               ``,
-              `> Plan generated from commit \`${context.sha.substring(0, 7)}\`. Apply will run automatically on merge to \`main\`.`,
+              `> Plan generated from commit \`${context.sha.substring(0, 7)}\`. Apply will run automatically on merge to \`${ env === 'prod' ? 'release/**' : 'main' }\`.`,
             ].join('\n');
 
-            // Delete previous IaC plan comments for this PR
+            // Delete previous IaC plan comments for this env/PR
             const comments = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.payload.pull_request.number,
             });
             for (const comment of comments.data) {
-              if (comment.user.type === 'Bot' && comment.body.includes('OpenTofu Plan')) {
+              if (comment.user.type === 'Bot' && comment.body.includes(`OpenTofu Plan — \`${env}\``)) {
                 await github.rest.issues.deleteComment({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
@@ -210,31 +301,32 @@ jobs:
               body,
             });
 
-      # ── Apply (main branch only) ─────────────────────────────────────────────
+      # ── Apply ─────────────────────────────────────────────────────────────────
 
-      - name: OpenTofu apply
+      - name: OpenTofu apply (${{ matrix.env }})
         if: env.RUN_APPLY == 'true'
         working-directory: infra
         run: |
           tofu apply \
-            -var-file=envs/dev.tfvars \
+            -var-file="${{ env.TF_VARFILE }}" \
             -var="aws_profile=" \
-            -var="anthropic_api_key=${{ secrets.PDI_ANTHROPIC_API_KEY }}" \
-            -var="mcp_ado_api_key=${{ secrets.PDI_MCP_ADO_API_KEY }}" \
-            -var="mcp_atlassian_api_key=${{ secrets.PDI_MCP_ATLASSIAN_API_KEY }}" \
-            -var="mcp_salesforce_api_key=${{ secrets.PDI_MCP_SALESFORCE_API_KEY }}" \
+            -var="anthropic_api_key=${{ env.ANTHROPIC_API_KEY }}" \
+            -var="mcp_ado_api_key=${{ env.MCP_ADO_API_KEY }}" \
+            -var="mcp_atlassian_api_key=${{ env.MCP_ATLASSIAN_API_KEY }}" \
+            -var="mcp_salesforce_api_key=${{ env.MCP_SALESFORCE_API_KEY }}" \
             -auto-approve \
             -no-color \
             2>&1 | tee /tmp/apply_output.txt
         env:
           AWS_PROFILE: ""
 
-      # ── Summary ─────────────────────────────────────────────────────────────
+      # ── Summary ───────────────────────────────────────────────────────────────
 
-      - name: IaC summary
+      - name: IaC summary (${{ matrix.env }})
         if: always()
         run: |
-          echo "## PDI IaC Summary" >> $GITHUB_STEP_SUMMARY
+          ENV="${{ matrix.env }}"
+          echo "## PDI IaC Summary — \`$ENV\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
           if [ "$RUN_APPLY" = "true" ]; then
@@ -244,7 +336,8 @@ jobs:
             tail -20 /tmp/apply_output.txt >> $GITHUB_STEP_SUMMARY 2>/dev/null || true
             echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           else
-            echo "### 📋 Plan only (merge to \`main\` to apply)" >> $GITHUB_STEP_SUMMARY
+            APPLY_BRANCH=$([ "$ENV" = "prod" ] && echo "release/**" || echo "main")
+            echo "### 📋 Plan only (merge to \`$APPLY_BRANCH\` to apply)" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
             tail -30 /tmp/plan_output.txt >> $GITHUB_STEP_SUMMARY 2>/dev/null || true

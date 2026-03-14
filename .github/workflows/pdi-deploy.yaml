@@ -1,11 +1,22 @@
-# Deploy HolmesGPT to the PDI dev EKS cluster.
-# Triggered automatically on every push to main (after pdi-build.yaml has pushed :latest).
-# Also available as a manual workflow_dispatch for emergency re-deploys.
+# Deploy HolmesGPT to PDI EKS clusters.
+#
+# Environments:
+#   dev  — triggered on push to main
+#   prod — triggered on push to release/** (e.g., release/1.2.3)
 #
 # What this does:
-#   1. Builds and pushes the Docker image tagged :latest to ECR
+#   1. Builds and pushes the Docker image to the environment's ECR registry
 #   2. Restarts the Holmes deployment so Kubernetes pulls the new image
 #   3. Waits for the rollout to complete and verifies health endpoints
+#
+# Required GitHub Secrets (repository-level, for dev):
+#   PDI_AWS_ACCESS_KEY_ID          — dev IAM access key
+#   PDI_AWS_SECRET_ACCESS_KEY      — dev IAM secret key
+#
+# Required GitHub Secrets (prod environment — Settings > Environments > prod):
+#   PDI_PROD_AWS_ACCESS_KEY_ID     — prod IAM access key
+#   PDI_PROD_AWS_SECRET_ACCESS_KEY — prod IAM secret key
+#   PDI_PROD_ECR_REGISTRY          — <PROD_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com
 
 name: PDI — Deploy
 
@@ -13,46 +24,77 @@ on:
   push:
     branches:
       - main
+      - 'release/**'
     paths-ignore:
       - 'docs/**'
       - '*.md'
       - 'mkdocs.yml'
   workflow_dispatch:
     inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - prod
       skip_build:
         description: 'Skip Docker build and just restart the pod (yes/no)'
         required: false
         default: 'no'
 
 concurrency:
-  group: pdi-deploy
+  group: pdi-deploy-${{ github.ref }}
   cancel-in-progress: false   # Never cancel a deploy mid-flight
 
 env:
   AWS_REGION: us-east-1
-  ECR_REGISTRY: 717423812395.dkr.ecr.us-east-1.amazonaws.com
   ECR_REPOSITORY: holmesgpt
-  EKS_CLUSTER: holmesgpt-dev
   K8S_NAMESPACE: holmesgpt
   DEPLOYMENT_NAME: holmes-holmes
 
 jobs:
   deploy:
-    name: Build, push :latest and deploy
+    name: Deploy to ${{ (github.ref == 'refs/heads/main' || github.event.inputs.environment == 'dev') && 'dev' || 'prod' }}
     runs-on: ubuntu-latest
+
+    # Use GitHub Environment for prod (enables protection rules and separate secrets)
+    environment: ${{ (startsWith(github.ref, 'refs/heads/release/') || github.event.inputs.environment == 'prod') && 'prod' || '' }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # ── Resolve per-environment config ───────────────────────────────────────
+
+      - name: Set environment variables
+        id: env-config
+        run: |
+          if [[ "${{ github.ref }}" == refs/heads/release/* ]] || [[ "${{ github.event.inputs.environment }}" == "prod" ]]; then
+            echo "DEPLOY_ENV=prod" >> $GITHUB_ENV
+            echo "AWS_ACCESS_KEY_ID=${{ secrets.PDI_PROD_AWS_ACCESS_KEY_ID }}" >> $GITHUB_ENV
+            echo "AWS_SECRET_ACCESS_KEY=${{ secrets.PDI_PROD_AWS_SECRET_ACCESS_KEY }}" >> $GITHUB_ENV
+            echo "ECR_REGISTRY=${{ secrets.PDI_PROD_ECR_REGISTRY }}" >> $GITHUB_ENV
+            echo "EKS_CLUSTER=holmesgpt-prod" >> $GITHUB_ENV
+            echo "HEALTH_BASE_URL=https://holmesgpt.platform.pditechnologies.com" >> $GITHUB_ENV
+          else
+            echo "DEPLOY_ENV=dev" >> $GITHUB_ENV
+            echo "AWS_ACCESS_KEY_ID=${{ secrets.PDI_AWS_ACCESS_KEY_ID }}" >> $GITHUB_ENV
+            echo "AWS_SECRET_ACCESS_KEY=${{ secrets.PDI_AWS_SECRET_ACCESS_KEY }}" >> $GITHUB_ENV
+            echo "ECR_REGISTRY=717423812395.dkr.ecr.us-east-1.amazonaws.com" >> $GITHUB_ENV
+            echo "EKS_CLUSTER=holmesgpt-dev" >> $GITHUB_ENV
+            echo "HEALTH_BASE_URL=https://holmesgpt.dev.platform.pditechnologies.com" >> $GITHUB_ENV
+          fi
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.PDI_AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.PDI_AWS_SECRET_ACCESS_KEY }}
+          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # ── Docker build & push ──────────────────────────────────────────────────
+      # ── Docker build & push ───────────────────────────────────────────────────
 
       - name: Set up Docker Buildx
         if: github.event.inputs.skip_build != 'yes'
@@ -66,7 +108,7 @@ jobs:
         id: sha
         run: echo "short=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
 
-      - name: Build and push :latest to ECR
+      - name: Build and push to ECR
         if: github.event.inputs.skip_build != 'yes'
         uses: docker/build-push-action@v6
         with:
@@ -76,12 +118,12 @@ jobs:
           tags: |
             ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:latest
             ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
-            ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:main-${{ steps.sha.outputs.short }}
+            ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.DEPLOY_ENV }}-${{ steps.sha.outputs.short }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64
 
-      # ── Kubernetes rollout ───────────────────────────────────────────────────
+      # ── Kubernetes rollout ────────────────────────────────────────────────────
 
       - name: Update kubeconfig for EKS
         run: |
@@ -100,11 +142,11 @@ jobs:
             -n ${{ env.K8S_NAMESPACE }} \
             --timeout=180s
 
-      # ── Health verification ──────────────────────────────────────────────────
+      # ── Health verification ───────────────────────────────────────────────────
 
       - name: Verify health endpoints
         run: |
-          BASE_URL="https://holmesgpt.dev.platform.pditechnologies.com"
+          BASE_URL="${{ env.HEALTH_BASE_URL }}"
 
           echo "Waiting 15s for pod to become ready..."
           sleep 15
@@ -131,17 +173,18 @@ jobs:
         run: |
           kubectl get pods -n ${{ env.K8S_NAMESPACE }} -o wide
 
-      # ── Summary ─────────────────────────────────────────────────────────────
+      # ── Summary ──────────────────────────────────────────────────────────────
 
       - name: Deployment summary
         run: |
           SHORT="${{ steps.sha.outputs.short }}"
-          echo "## PDI Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "## PDI Deployment Summary — \`${{ env.DEPLOY_ENV }}\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| | |" >> $GITHUB_STEP_SUMMARY
           echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Environment** | \`${{ env.DEPLOY_ENV }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| **Cluster** | \`${{ env.EKS_CLUSTER }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| **Namespace** | \`${{ env.K8S_NAMESPACE }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| **Image** | \`${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:latest\` |" >> $GITHUB_STEP_SUMMARY
           echo "| **Commit** | \`${{ github.sha }}\` (\`${SHORT}\`) |" >> $GITHUB_STEP_SUMMARY
-          echo "| **URL** | https://holmesgpt.dev.platform.pditechnologies.com |" >> $GITHUB_STEP_SUMMARY
+          echo "| **URL** | ${{ env.HEALTH_BASE_URL }} |" >> $GITHUB_STEP_SUMMARY
