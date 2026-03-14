@@ -592,37 +592,66 @@ def build_project_tool_executor(
     for instance in toolset_instances:
         try:
             # ── MCP toolset with per-project API key ──────────────────────────
-            if instance.type in _MCP_TOOLSET_TYPES and instance.secret_arn:
-                creds = _fetch_secret(instance.secret_arn)
-                api_key = creds.get("api_key") or creds.get("x-api-key") or ""
-                if not api_key:
-                    logging.warning(
-                        "Secret %s for MCP toolset %s has no 'api_key' field — skipping",
-                        instance.secret_arn,
-                        instance.name,
-                    )
-                    continue
+            if instance.type in _MCP_TOOLSET_TYPES:
+                if instance.secret_arn:
+                    creds = _fetch_secret(instance.secret_arn)
+                    api_key = creds.get("api_key") or creds.get("x-api-key") or ""
+                    if not api_key:
+                        logging.warning(
+                            "Secret %s for MCP toolset %s has no 'api_key' field — skipping",
+                            instance.secret_arn,
+                            instance.name,
+                        )
+                        continue
+                else:
+                    # No secret_arn — fall back to env var (e.g. MCP_ADO_API_KEY)
+                    env_var = f"MCP_{instance.type.upper()}_API_KEY"
+                    api_key = os.environ.get(env_var, "")
+                    if not api_key:
+                        logging.warning(
+                            "MCP toolset %s has no secret_arn and env var %s is not set — skipping",
+                            instance.name,
+                            env_var,
+                        )
+                        continue
                 ts = _build_mcp_toolset(instance, api_key)
+                ts.check_prerequisites()
                 project_toolsets.append(ts)
                 continue
 
             # ── AWS toolset with account filter ───────────────────────────────
-            if instance.type == "aws_api" and instance.aws_accounts:
-                global_ts = global_by_name.get(instance.name)
-                if global_ts is not None:
-                    ts = _build_aws_toolset_with_account_filter(global_ts, instance.aws_accounts)
-                    project_toolsets.append(ts)
+            if instance.type == "aws_api":
+                if instance.aws_accounts:
+                    global_ts = global_by_name.get(instance.name) or global_by_name.get("aws_api")
+                    if global_ts is not None:
+                        ts = _build_aws_toolset_with_account_filter(global_ts, instance.aws_accounts)
+                        project_toolsets.append(ts)
+                    else:
+                        logging.warning(
+                            "AWS toolset '%s' not found in global executor for project %s",
+                            instance.name,
+                            project.id,
+                        )
                 else:
-                    logging.warning(
-                        "AWS toolset '%s' not found in global executor for project %s",
-                        instance.name,
-                        project.id,
-                    )
+                    # No account filter — reuse global aws_api toolset as-is
+                    global_ts = global_by_name.get(instance.name) or global_by_name.get("aws_api")
+                    if global_ts is not None:
+                        project_toolsets.append(global_ts)
+                    else:
+                        logging.warning(
+                            "Global aws_api toolset not found for project %s",
+                            project.id,
+                        )
                 continue
 
             # ── Global toolset reuse (no per-project overrides) ───────────────
+            # Match by instance name first, then by instance type (which IS the toolset name
+            # for built-in toolsets like datadog/general, datadog/logs, grafana/dashboards, etc.)
             if instance.name in global_by_name:
                 project_toolsets.append(global_by_name[instance.name])
+                continue
+            if instance.type in global_by_name:
+                project_toolsets.append(global_by_name[instance.type])
                 continue
 
             # ── Dynamically instantiate Python toolset with Secrets Manager creds ──

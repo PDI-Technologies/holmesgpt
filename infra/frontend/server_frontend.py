@@ -11,6 +11,8 @@ import hmac
 import logging
 import os
 import secrets
+import time
+from collections import defaultdict
 from pathlib import Path
 
 import json
@@ -27,6 +29,24 @@ SESSION_MAX_AGE = 86400  # 24 hours
 
 # In-memory session store (sufficient for single-pod deployment)
 _sessions: dict[str, str] = {}
+
+# Brute-force protection: track failed login attempts per IP
+_login_failures: dict[str, list[float]] = defaultdict(list)
+_LOGIN_WINDOW = 300   # 5-minute sliding window
+_LOGIN_MAX_ATTEMPTS = 10  # max failures before lockout
+
+
+def _check_login_rate_limit(ip: str) -> bool:
+    """Return True if the IP is allowed to attempt login, False if locked out."""
+    now = time.time()
+    attempts = _login_failures[ip]
+    # Purge attempts outside the window
+    _login_failures[ip] = [t for t in attempts if now - t < _LOGIN_WINDOW]
+    return len(_login_failures[ip]) < _LOGIN_MAX_ATTEMPTS
+
+
+def _record_login_failure(ip: str) -> None:
+    _login_failures[ip].append(time.time())
 
 
 def get_credentials() -> tuple[str, str]:
@@ -269,6 +289,11 @@ def mount_frontend(app: FastAPI, config=None) -> None:
 
     @app.post("/auth/login")
     async def auth_login(request: Request):
+        # Brute-force protection: check rate limit before processing credentials
+        client_ip = request.headers.get("x-forwarded-for", request.client.host if request.client else "unknown").split(",")[0].strip()
+        if not _check_login_rate_limit(client_ip):
+            raise HTTPException(status_code=429, detail="Too many login attempts. Try again in 5 minutes.")
+
         body = await request.json()
         username = body.get("username", "")
         password_input = body.get("password", "")
@@ -282,7 +307,7 @@ def mount_frontend(app: FastAPI, config=None) -> None:
             response = JSONResponse({"ok": True})
             response.set_cookie(
                 SESSION_COOKIE, session_id,
-                max_age=SESSION_MAX_AGE, httponly=True, samesite="lax",
+                max_age=SESSION_MAX_AGE, httponly=True, secure=True, samesite="lax",
             )
             return response
 
@@ -299,10 +324,11 @@ def mount_frontend(app: FastAPI, config=None) -> None:
             response = JSONResponse({"ok": True})
             response.set_cookie(
                 SESSION_COOKIE, session_id,
-                max_age=SESSION_MAX_AGE, httponly=True, samesite="lax",
+                max_age=SESSION_MAX_AGE, httponly=True, secure=True, samesite="lax",
             )
             return response
 
+        _record_login_failure(client_ip)
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     @app.post("/auth/logout")
@@ -1046,7 +1072,14 @@ def mount_frontend(app: FastAPI, config=None) -> None:
                     if _frontend_dir_inv not in _sys_inv.path:
                         _sys_inv.path.insert(0, _frontend_dir_inv)
                     from projects import get_instances_store as _get_instances_store_inv, build_project_tool_executor  # noqa: PLC0415
-                    ai = build_project_tool_executor(resolved_project, config, config.dal, _get_instances_store_inv())
+                    from holmes.core.tool_calling_llm import ToolCallingLLM as _ToolCallingLLM  # noqa: PLC0415
+                    _project_executor = build_project_tool_executor(resolved_project, config, config.dal, _get_instances_store_inv())
+                    ai = _ToolCallingLLM(
+                        _project_executor,
+                        config.max_steps,
+                        config._get_llm(),
+                        tool_results_dir=None,
+                    )
                 else:
                     ai = _create_scoped_toolcalling_llm(config, source)
                 global_instructions = config.dal.get_global_instructions_for_account()

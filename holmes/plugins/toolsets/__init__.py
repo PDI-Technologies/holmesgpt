@@ -51,12 +51,15 @@ from holmes.plugins.toolsets.kubectl_run.kubectl_run_toolset import KubectlRunTo
 from holmes.plugins.toolsets.kubernetes_logs import KubernetesLogsToolset
 from holmes.plugins.toolsets.mcp.toolset_mcp import RemoteMCPToolset
 from holmes.plugins.toolsets.newrelic.newrelic import NewRelicToolset
+from holmes.plugins.toolsets.outlook.toolset_outlook import OutlookToolset
+from holmes.plugins.toolsets.pagerduty.toolset_pagerduty import PagerDutyToolset
 from holmes.plugins.toolsets.rabbitmq.toolset_rabbitmq import RabbitMQToolset
 from holmes.plugins.toolsets.robusta.robusta import RobustaToolset
 from holmes.plugins.toolsets.runbook.runbook_fetcher import RunbookToolset
 from holmes.plugins.toolsets.servicenow_tables.servicenow_tables import (
     ServiceNowTablesToolset,
 )
+from holmes.plugins.toolsets.teams.toolset_teams import TeamsToolset
 
 THIS_DIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -118,6 +121,9 @@ def load_python_toolsets(
         DatabaseToolset(),
         ElasticsearchDataToolset(),
         ElasticsearchClusterToolset(),
+        PagerDutyToolset(),
+        TeamsToolset(),
+        OutlookToolset(),
     ]
 
     if not DISABLE_PROMETHEUS_TOOLSET:

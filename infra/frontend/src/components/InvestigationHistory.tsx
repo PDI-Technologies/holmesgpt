@@ -211,6 +211,7 @@ export default function InvestigationHistory() {
   const [selected, setSelected] = useState<Investigation | null>(null)
   const [loadingDetail, setLoadingDetail] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -246,16 +247,16 @@ export default function InvestigationHistory() {
     }
   }
 
-  const handleDelete = async (id: string, e: React.MouseEvent) => {
+  const handleDeleteConfirmed = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation()
-    if (!confirm('Delete this investigation record? This cannot be undone.')) return
+    setConfirmDeleteId(null)
     setDeleting(id)
     try {
       await api.deleteInvestigation(id)
       setInvestigations((prev) => prev.filter((i) => i.id !== id))
       if (selected?.id === id) setSelected(null)
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to delete')
+    } catch {
+      // silently ignore — investigation may already be gone
     } finally {
       setDeleting(null)
     }
@@ -369,18 +370,36 @@ export default function InvestigationHistory() {
                     <td className="px-4 py-3 text-xs text-gray-500 text-center">
                       {inv.tool_calls.length}
                     </td>
-                    <td className="px-4 py-3 text-right">
-                      <button
-                        type="button"
-                        onClick={(e) => handleDelete(inv.id, e)}
-                        disabled={deleting === inv.id}
-                        className="p-1 text-gray-300 hover:text-red-500 transition-colors rounded disabled:opacity-40"
-                        title="Delete"
-                      >
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-                        </svg>
-                      </button>
+                    <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                      {confirmDeleteId === inv.id ? (
+                        <div className="flex items-center justify-end gap-1">
+                          <span className="text-xs text-gray-600">Delete?</span>
+                          <button
+                            onClick={(e) => handleDeleteConfirmed(inv.id, e)}
+                            className="px-2 py-1 text-xs font-medium text-white bg-red-500 rounded hover:bg-red-600 transition-colors"
+                          >
+                            Yes
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(null) }}
+                            className="px-2 py-1 text-xs font-medium text-gray-600 bg-gray-100 rounded hover:bg-gray-200 transition-colors"
+                          >
+                            No
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(inv.id) }}
+                          disabled={deleting === inv.id}
+                          className="p-1 text-gray-300 hover:text-red-500 transition-colors rounded disabled:opacity-40"
+                          title="Delete"
+                        >
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                          </svg>
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}

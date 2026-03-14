@@ -290,7 +290,9 @@ function InstancesTab({
   const [loading, setLoading] = useState(true)
   const [editingInstance, setEditingInstance] = useState<Instance | null | undefined>(undefined)
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const [migrating, setMigrating] = useState(false)
+  const [migrateError, setMigrateError] = useState<string | null>(null)
 
   const load = () => {
     setLoading(true)
@@ -302,14 +304,14 @@ function InstancesTab({
 
   useEffect(() => { load() }, [integration.name])
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Delete this instance? Projects using it via tag filter will no longer resolve it.')) return
+  const handleDeleteConfirmed = async (id: string) => {
+    setConfirmDeleteId(null)
     setDeleting(id)
     try {
       await api.deleteInstance(id)
       load()
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'Failed to delete instance')
+      // silently ignore — instance may already be gone
     } finally {
       setDeleting(null)
     }
@@ -321,6 +323,7 @@ function InstancesTab({
 
   const handleMigrate = async () => {
     setMigrating(true)
+    setMigrateError(null)
     try {
       const config = integration.config as Record<string, unknown>
       await api.createInstance({
@@ -337,7 +340,7 @@ function InstancesTab({
       })
       load()
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'Failed to create instance')
+      setMigrateError(e instanceof Error ? e.message : 'Failed to create instance')
     } finally {
       setMigrating(false)
     }
@@ -374,6 +377,9 @@ function InstancesTab({
               </p>
             </div>
           </div>
+          {migrateError && (
+            <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-2 py-1">{migrateError}</p>
+          )}
           <div className="flex gap-2 justify-end">
             <button
               onClick={() => setEditingInstance(null)}
@@ -448,25 +454,45 @@ function InstancesTab({
                     )}
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
-                    <button
-                      onClick={() => setEditingInstance(inst)}
-                      className="p-1 text-gray-400 hover:text-pdi-sky transition-colors rounded"
-                      title="Edit"
-                    >
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125" />
-                      </svg>
-                    </button>
-                    <button
-                      onClick={() => handleDelete(inst.id)}
-                      disabled={deleting === inst.id}
-                      className="p-1 text-gray-400 hover:text-red-500 transition-colors rounded disabled:opacity-40"
-                      title="Delete"
-                    >
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-                      </svg>
-                    </button>
+                    {confirmDeleteId === inst.id ? (
+                      <>
+                        <span className="text-xs text-gray-600">Delete?</span>
+                        <button
+                          onClick={() => handleDeleteConfirmed(inst.id)}
+                          className="px-2 py-1 text-xs font-medium text-white bg-red-500 rounded hover:bg-red-600 transition-colors"
+                        >
+                          Yes
+                        </button>
+                        <button
+                          onClick={() => setConfirmDeleteId(null)}
+                          className="px-2 py-1 text-xs font-medium text-gray-600 bg-gray-100 rounded hover:bg-gray-200 transition-colors"
+                        >
+                          No
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => setEditingInstance(inst)}
+                          className="p-1 text-gray-400 hover:text-pdi-sky transition-colors rounded"
+                          title="Edit"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => setConfirmDeleteId(inst.id)}
+                          disabled={deleting === inst.id}
+                          className="p-1 text-gray-400 hover:text-red-500 transition-colors rounded disabled:opacity-40"
+                          title="Delete"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                          </svg>
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               )}

@@ -20,13 +20,17 @@ terraform {
     }
   }
 
-  # Use local backend for initial setup. Migrate to S3 later:
-  #   backend "s3" {
-  #     bucket  = "holmesgpt-tfstate-<account-id>"
-  #     key     = "holmesgpt/<env>/terraform.tfstate"
-  #     region  = "us-east-1"
-  #     profile = "pdi-platform-dev"
-  #   }
+  # Remote state in S3 — backend config is injected at `tofu init` time via
+  # -backend-config flags (see .github/workflows/pdi-iac.yaml and the ship skill).
+  # For local development, run:
+  #   tofu init -backend-config=envs/backend-dev.hcl
+  # where backend-dev.hcl contains:
+  #   bucket  = "holmesgpt-tfstate-717423812395"
+  #   key     = "holmesgpt/dev/terraform.tfstate"
+  #   region  = "us-east-1"
+  #   profile = "pdi-platform-dev"
+  #   encrypt = true
+  backend "s3" {}
 
 }
 
@@ -51,7 +55,12 @@ provider "helm" {
     exec {
       api_version = "client.authentication.k8s.io/v1beta1"
       command     = "aws"
-      args        = ["eks", "get-token", "--cluster-name", module.eks.cluster_name, "--profile", var.aws_profile]
+      # When aws_profile is empty (CI uses env-var credentials), omit --profile flag.
+      args = var.aws_profile != "" ? [
+        "eks", "get-token", "--cluster-name", module.eks.cluster_name, "--profile", var.aws_profile
+      ] : [
+        "eks", "get-token", "--cluster-name", module.eks.cluster_name
+      ]
     }
   }
 }
@@ -63,7 +72,12 @@ provider "kubernetes" {
   exec {
     api_version = "client.authentication.k8s.io/v1beta1"
     command     = "aws"
-    args        = ["eks", "get-token", "--cluster-name", module.eks.cluster_name, "--profile", var.aws_profile]
+    # When aws_profile is empty (CI uses env-var credentials), omit --profile flag.
+    args = var.aws_profile != "" ? [
+      "eks", "get-token", "--cluster-name", module.eks.cluster_name, "--profile", var.aws_profile
+    ] : [
+      "eks", "get-token", "--cluster-name", module.eks.cluster_name
+    ]
   }
 }
 

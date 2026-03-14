@@ -98,6 +98,7 @@ function EditorPanel({ entry, onSave, onReset }: EditorPanelProps) {
   const [draft, setDraft] = useState(entry.instructions)
   const [saving, setSaving] = useState(false)
   const [resetting, setResetting] = useState(false)
+  const [confirmReset, setConfirmReset] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saveSuccess, setSaveSuccess] = useState(false)
 
@@ -118,8 +119,8 @@ function EditorPanel({ entry, onSave, onReset }: EditorPanelProps) {
     }
   }
 
-  const handleReset = async () => {
-    if (!window.confirm(`Reset "${entry.name}" to its default instructions? Your custom text will be lost.`)) return
+  const handleResetConfirmed = async () => {
+    setConfirmReset(false)
     setResetting(true)
     setSaveError(null)
     try {
@@ -182,21 +183,39 @@ function EditorPanel({ entry, onSave, onReset }: EditorPanelProps) {
 
       {/* Action buttons */}
       <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
-        <button
-          onClick={handleReset}
-          disabled={resetting || !entry.is_overridden}
-          title={entry.is_overridden ? 'Remove override and restore default' : 'No override to reset'}
-          className="text-xs text-pdi-slate hover:text-pdi-orange disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
-        >
-          {resetting ? (
-            <>
-              <span className="w-3 h-3 border border-pdi-slate border-t-transparent rounded-full animate-spin" />
-              Resetting...
-            </>
-          ) : (
-            'Reset to default'
-          )}
-        </button>
+        {confirmReset ? (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-600">Reset to default?</span>
+            <button
+              onClick={handleResetConfirmed}
+              className="px-2 py-1 text-xs font-medium text-white bg-red-500 rounded hover:bg-red-600 transition-colors"
+            >
+              Yes
+            </button>
+            <button
+              onClick={() => setConfirmReset(false)}
+              className="px-2 py-1 text-xs font-medium text-gray-600 bg-gray-100 rounded hover:bg-gray-200 transition-colors"
+            >
+              No
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setConfirmReset(true)}
+            disabled={resetting || !entry.is_overridden}
+            title={entry.is_overridden ? 'Remove override and restore default' : 'No override to reset'}
+            className="text-xs text-pdi-slate hover:text-pdi-orange disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
+          >
+            {resetting ? (
+              <>
+                <span className="w-3 h-3 border border-pdi-slate border-t-transparent rounded-full animate-spin" />
+                Resetting...
+              </>
+            ) : (
+              'Reset to default'
+            )}
+          </button>
+        )}
 
         <div className="flex items-center gap-2">
           {saveSuccess && (

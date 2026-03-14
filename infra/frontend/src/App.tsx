@@ -6,11 +6,13 @@ import InvestigationHistory from './components/InvestigationHistory'
 import Integrations from './components/Integrations'
 import Settings from './components/Settings'
 import Projects from './components/Projects'
+import Instances from './components/Instances'
+import Docs from './components/Docs'
 import LoginPage from './components/LoginPage'
 import { api } from './lib/api'
 import { useProject } from './hooks/useProject'
 
-export type Page = 'chat' | 'investigate' | 'history' | 'integrations' | 'settings' | 'projects'
+export type Page = 'chat' | 'investigate' | 'history' | 'integrations' | 'instances' | 'settings' | 'projects' | 'docs'
 
 export default function App() {
   const [page, setPage] = useState<Page>('chat')
@@ -20,6 +22,13 @@ export default function App() {
   useEffect(() => {
     api.checkAuth().then(setAuthenticated)
   }, [])
+
+  // Load projects once authentication is confirmed
+  useEffect(() => {
+    if (authenticated === true) {
+      reloadProjects()
+    }
+  }, [authenticated]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (authenticated === null) {
     return (
@@ -52,6 +61,8 @@ export default function App() {
       {page === 'integrations' && <Integrations />}
       {page === 'settings' && <Settings />}
       {page === 'projects' && <Projects projects={projects} onReload={reloadProjects} />}
+      {page === 'instances' && <Instances />}
+      {page === 'docs' && <Docs />}
     </Layout>
   )
 }

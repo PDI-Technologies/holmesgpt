@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import { api, Project } from '../lib/api'
 
 const STORAGE_KEY = 'holmes_selected_project_id'
@@ -27,9 +27,8 @@ export function useProject() {
     }
   }, [selectedProjectId])
 
-  useEffect(() => {
-    reloadProjects()
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  // Projects are loaded by App.tsx after authentication is confirmed
+  // (no auto-load on mount to avoid 401 before auth cookie is set)
 
   const selectProject = useCallback((id: string | null) => {
     setSelectedProjectId(id)

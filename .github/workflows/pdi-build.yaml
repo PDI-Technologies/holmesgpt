@@ -1,0 +1,143 @@
+# Build and push the HolmesGPT Docker image to PDI ECR on every PR.
+# For same-repo PRs: build + push (tagged by commit SHA).
+# For fork PRs: build only (no push — no AWS credentials available).
+#
+# The image is NOT deployed here — deployment happens in pdi-deploy.yaml
+# which is triggered manually or on merge to main.
+
+name: PDI — Build
+
+on:
+  pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
+      - 'mkdocs.yml'
+  workflow_dispatch:
+    inputs:
+      push_image:
+        description: 'Push image to ECR (yes/no)'
+        required: false
+        default: 'yes'
+
+concurrency:
+  group: pdi-build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REGISTRY: 717423812395.dkr.ecr.us-east-1.amazonaws.com
+  ECR_REPOSITORY: holmesgpt
+  IMAGE_TAG: ${{ github.sha }}
+  SHORT_SHA: ${{ github.sha != '' && github.sha || 'unknown' }}
+
+jobs:
+  build:
+    name: Build Docker image
+    runs-on: ubuntu-latest
+
+    # Only push for same-repo PRs (not forks) — forks have no AWS credentials
+    env:
+      SHOULD_PUSH: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.push_image == 'yes') || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Configure AWS credentials
+        if: env.SHOULD_PUSH == 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.PDI_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.PDI_AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        if: env.SHOULD_PUSH == 'true'
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Compute short SHA
+        id: sha
+        run: echo "short=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+
+      - name: Build (and push if same-repo)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/Dockerfile.frontend
+          push: ${{ env.SHOULD_PUSH == 'true' }}
+          tags: |
+            ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+            ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:pr-${{ github.event.pull_request.number || 'manual' }}-${{ steps.sha.outputs.short }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+
+      - name: Comment on PR with image details
+        if: env.SHOULD_PUSH == 'true' && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const sha = context.sha;
+            const shortSha = sha.substring(0, 7);
+            const registry = process.env.ECR_REGISTRY;
+            const repo = process.env.ECR_REPOSITORY;
+            const prNum = context.payload.pull_request.number;
+
+            const body = [
+              `### 🐳 PDI Docker Image Built`,
+              ``,
+              `**Image:** \`${registry}/${repo}:${sha}\``,
+              `**Short tag:** \`${registry}/${repo}:pr-${prNum}-${shortSha}\``,
+              ``,
+              `To deploy this PR image to dev:`,
+              `\`\`\`bash`,
+              `# Force-restart the pod with this specific image`,
+              `kubectl set image deployment/holmes-holmes \\`,
+              `  holmes=${registry}/${repo}:${sha} \\`,
+              `  -n holmesgpt`,
+              `\`\`\``,
+              ``,
+              `> ⚠️ This is a PR image — it will be overwritten on next deploy to \`main\`.`,
+            ].join('\n');
+
+            // Delete previous bot comments for this PR
+            const comments = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNum,
+            });
+            for (const comment of comments.data) {
+              if (comment.user.type === 'Bot' && comment.body.includes('PDI Docker Image Built')) {
+                await github.rest.issues.deleteComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: comment.id,
+                });
+              }
+            }
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNum,
+              body,
+            });
+
+      - name: Build summary
+        run: |
+          echo "## PDI Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "$SHOULD_PUSH" = "true" ]; then
+            echo "✅ **Image pushed to ECR**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "- Registry: \`$ECR_REGISTRY\`" >> $GITHUB_STEP_SUMMARY
+            echo "- Repository: \`$ECR_REPOSITORY\`" >> $GITHUB_STEP_SUMMARY
+            echo "- Tag: \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "🔨 **Image built (not pushed — fork PR)**" >> $GITHUB_STEP_SUMMARY
+          fi
