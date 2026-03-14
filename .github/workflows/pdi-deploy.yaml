@@ -65,13 +65,26 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       # ── Resolve per-environment config ───────────────────────────────────────
 
       - name: Set environment variables
         id: env-config
+        env:
+          GH_REF: ${{ github.ref }}
+          GH_INPUT_ENV: ${{ github.event.inputs.environment }}
         run: |
-          if [[ "${{ github.ref }}" == refs/heads/release/* ]] || [[ "${{ github.event.inputs.environment }}" == "prod" ]]; then
+          # Validate workflow_dispatch input to prevent injection
+          if [ -n "$GH_INPUT_ENV" ]; then
+            case "$GH_INPUT_ENV" in
+              dev|prod) ;;
+              *) echo "Invalid environment: $GH_INPUT_ENV" >&2; exit 1 ;;
+            esac
+          fi
+
+          if [[ "$GH_REF" == refs/heads/release/* ]] || [[ "$GH_INPUT_ENV" == "prod" ]]; then
             echo "DEPLOY_ENV=prod" >> $GITHUB_ENV
             echo "AWS_ACCESS_KEY_ID=${{ secrets.PDI_PROD_AWS_ACCESS_KEY_ID }}" >> $GITHUB_ENV
             echo "AWS_SECRET_ACCESS_KEY=${{ secrets.PDI_PROD_AWS_SECRET_ACCESS_KEY }}" >> $GITHUB_ENV
@@ -176,15 +189,17 @@ jobs:
       # ── Summary ──────────────────────────────────────────────────────────────
 
       - name: Deployment summary
+        env:
+          GH_SHA: ${{ github.sha }}
+          SHORT_SHA: ${{ steps.sha.outputs.short }}
         run: |
-          SHORT="${{ steps.sha.outputs.short }}"
-          echo "## PDI Deployment Summary — \`${{ env.DEPLOY_ENV }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "## PDI Deployment Summary — \`$DEPLOY_ENV\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| | |" >> $GITHUB_STEP_SUMMARY
           echo "|---|---|" >> $GITHUB_STEP_SUMMARY
-          echo "| **Environment** | \`${{ env.DEPLOY_ENV }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Cluster** | \`${{ env.EKS_CLUSTER }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Namespace** | \`${{ env.K8S_NAMESPACE }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Image** | \`${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:latest\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Commit** | \`${{ github.sha }}\` (\`${SHORT}\`) |" >> $GITHUB_STEP_SUMMARY
-          echo "| **URL** | ${{ env.HEALTH_BASE_URL }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Environment** | \`$DEPLOY_ENV\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Cluster** | \`$EKS_CLUSTER\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Namespace** | \`$K8S_NAMESPACE\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Image** | \`$ECR_REGISTRY/$ECR_REPOSITORY:latest\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Commit** | \`$GH_SHA\` (\`$SHORT_SHA\`) |" >> $GITHUB_STEP_SUMMARY
+          echo "| **URL** | $HEALTH_BASE_URL |" >> $GITHUB_STEP_SUMMARY

@@ -110,17 +110,25 @@ jobs:
     steps:
       - name: Build environment matrix
         id: matrix
+        env:
+          GH_EVENT_NAME: ${{ github.event_name }}
+          GH_REF: ${{ github.ref }}
+          GH_INPUT_ENV: ${{ github.event.inputs.environment }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            # Manual dispatch: run only the selected environment
-            ENV="${{ github.event.inputs.environment }}"
+          if [ "$GH_EVENT_NAME" = "workflow_dispatch" ]; then
+            # Manual dispatch: run only the selected environment.
+            # Validate input to prevent injection — only 'dev' or 'prod' are valid.
+            case "$GH_INPUT_ENV" in
+              dev|prod) ENV="$GH_INPUT_ENV" ;;
+              *) echo "Invalid environment: $GH_INPUT_ENV" >&2; exit 1 ;;
+            esac
             echo "matrix={\"include\":[{\"env\":\"$ENV\"}]}" >> $GITHUB_OUTPUT
 
-          elif [ "${{ github.event_name }}" = "pull_request" ]; then
+          elif [ "$GH_EVENT_NAME" = "pull_request" ]; then
             # PRs: plan both environments
             echo 'matrix={"include":[{"env":"dev"},{"env":"prod"}]}' >> $GITHUB_OUTPUT
 
-          elif [[ "${{ github.ref }}" == refs/heads/release/* ]]; then
+          elif [[ "$GH_REF" == refs/heads/release/* ]]; then
             # release/** branch push: apply prod only
             echo 'matrix={"include":[{"env":"prod"}]}' >> $GITHUB_OUTPUT
 
@@ -152,6 +160,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       # ── Resolve per-environment config ───────────────────────────────────────
 
