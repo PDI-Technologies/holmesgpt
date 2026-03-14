@@ -41,7 +41,7 @@ function TagFilterEditor({
     <div className="space-y-3">
       {/* AND / OR toggle */}
       <div className="flex items-center gap-2">
-        <span className="text-xs font-medium text-gray-600">Match logic:</span>
+        <span className="text-xs font-medium text-pdi-slate">Match logic:</span>
         {(['AND', 'OR'] as const).map((logic) => (
           <button
             key={logic}
@@ -50,13 +50,13 @@ function TagFilterEditor({
             className={`px-3 py-1 text-xs font-medium rounded-full border transition-colors ${
               tagFilter.logic === logic
                 ? 'bg-pdi-sky text-white border-pdi-sky'
-                : 'bg-white text-gray-600 border-gray-300 hover:border-pdi-sky'
+                : 'bg-white text-pdi-slate border-pdi-cool-gray hover:border-pdi-sky'
             }`}
           >
             {logic}
           </button>
         ))}
-        <span className="text-xs text-gray-400">
+        <span className="text-xs text-pdi-slate">
           {tagFilter.logic === 'AND' ? '— all tags must match' : '— any tag must match'}
         </span>
       </div>
@@ -70,20 +70,20 @@ function TagFilterEditor({
               placeholder="key"
               value={k}
               onChange={(e) => updateKey(k, e.target.value)}
-              className="w-28 text-sm border border-gray-300 rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-pdi-sky font-mono"
+              className="w-28 text-sm border border-pdi-cool-gray rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-pdi-sky font-mono"
             />
-            <span className="text-gray-400 text-sm">=</span>
+            <span className="text-pdi-slate text-sm">=</span>
             <input
               type="text"
               placeholder="value"
               value={v}
               onChange={(e) => updateValue(k, e.target.value)}
-              className="flex-1 text-sm border border-gray-300 rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-pdi-sky font-mono"
+              className="flex-1 text-sm border border-pdi-cool-gray rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-pdi-sky font-mono"
             />
             <button
               type="button"
               onClick={() => removeTag(k)}
-              className="text-gray-400 hover:text-red-500 transition-colors"
+              className="text-gray-400 hover:text-pdi-orange transition-colors"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -104,7 +104,7 @@ function TagFilterEditor({
       </div>
 
       {entries.length === 0 && (
-        <p className="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded px-2 py-1.5">
+        <p className="text-xs text-pdi-slate bg-gray-50 border border-pdi-cool-gray rounded px-2 py-1.5">
           Empty filter — only global (untagged) instances will be used.
         </p>
       )}
@@ -136,15 +136,15 @@ function InstancePreviewPanel({
   const resolved = useMemo(() => computePreview(tagFilter, allInstances), [tagFilter, allInstances])
 
   return (
-    <div className="border border-gray-200 rounded-lg p-3 bg-gray-50">
+    <div className="border border-pdi-cool-gray rounded-lg p-3 bg-gray-50">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-medium text-gray-600">Preview</span>
-        <span className="text-xs text-gray-500">
+        <span className="text-xs font-medium text-pdi-slate">Preview</span>
+        <span className="text-xs text-pdi-slate">
           {resolved.length} of {allInstances.length} instance{allInstances.length !== 1 ? 's' : ''} will be used
         </span>
       </div>
       {resolved.length === 0 ? (
-        <p className="text-xs text-gray-400 italic">No instances match this filter.</p>
+        <p className="text-xs text-pdi-slate italic">No instances match this filter.</p>
       ) : (
         <div className="space-y-1.5">
           {resolved.map((inst) => (
@@ -152,13 +152,13 @@ function InstancePreviewPanel({
               <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-pdi-sky/10 text-pdi-indigo">
                 {inst.type}
               </span>
-              <span className="text-xs font-medium text-gray-800">{inst.name}</span>
+              <span className="text-xs font-medium text-pdi-granite">{inst.name}</span>
               {Object.keys(inst.tags).length === 0 ? (
-                <span className="text-xs text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">global</span>
+                <span className="text-xs text-pdi-sun bg-pdi-sun/10 px-1.5 py-0.5 rounded-full">global</span>
               ) : (
                 <div className="flex gap-1">
                   {Object.entries(inst.tags).map(([k, v]) => (
-                    <span key={k} className="text-xs font-mono text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
+                    <span key={k} className="text-xs font-mono text-pdi-slate bg-gray-100 px-1.5 py-0.5 rounded">
                       {k}={v}
                     </span>
                   ))}
@@ -224,55 +224,55 @@ function ProjectModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl mx-4 overflow-hidden max-h-[90vh] flex flex-col">
-        <div className="px-6 py-4 border-b border-gray-100">
-          <h2 className="text-lg font-semibold text-gray-900">
+        <div className="px-6 py-4 border-b border-pdi-cool-gray">
+          <h2 className="text-lg font-semibold text-pdi-granite">
             {project ? 'Edit Project' : 'Create Project'}
           </h2>
         </div>
         <div className="px-6 py-5 space-y-5 overflow-y-auto flex-1">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+            <label className="block text-sm font-medium text-pdi-granite mb-1">Name</label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Logistics Cloud"
-              className="w-full text-sm border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-pdi-sky"
+              className="w-full text-sm border border-pdi-cool-gray rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-pdi-sky"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+            <label className="block text-sm font-medium text-pdi-granite mb-1">Description</label>
             <input
               type="text"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Optional description"
-              className="w-full text-sm border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-pdi-sky"
+              className="w-full text-sm border border-pdi-cool-gray rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-pdi-sky"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-pdi-granite mb-2">
               Instance Tag Filter
             </label>
-            <p className="text-xs text-gray-500 mb-3">
+            <p className="text-xs text-pdi-slate mb-3">
               Define which tagged instances this project uses. Global (untagged) instances are always included.
               Manage instances on the <a href="/instances" className="text-pdi-sky hover:underline">Instances page</a>.
             </p>
             <TagFilterEditor tagFilter={tagFilter} onChange={setTagFilter} />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-pdi-granite mb-2">
               Resolved Instances
             </label>
             <InstancePreviewPanel tagFilter={tagFilter} allInstances={allInstances} />
           </div>
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-sm text-pdi-orange">{error}</p>}
         </div>
-        <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
+        <div className="px-6 py-4 border-t border-pdi-cool-gray flex justify-end gap-3">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            className="px-4 py-2 text-sm font-medium text-pdi-granite bg-white border border-pdi-cool-gray rounded-lg hover:bg-gray-50 transition-colors"
           >
             Cancel
           </button>
@@ -320,10 +320,10 @@ export default function Projects({ projects: projectsProp, onReload }: ProjectsP
   return (
     <div className="h-full overflow-y-auto bg-gray-50">
       <div className="max-w-4xl mx-auto px-6 py-8">
-        <div className="flex items-center justify-between mb-6">
+        <div className="relative flex items-center justify-between mb-6 px-6 py-4 border-b border-pdi-cool-gray bg-white -mx-6 -mt-8">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Projects</h1>
-            <p className="text-sm text-gray-500 mt-1">
+            <h2 className="text-lg font-bold text-pdi-granite">Projects</h2>
+            <p className="text-xs text-pdi-slate mt-1">
               Projects use tag filters to select which instances to use. Select a project in the sidebar to scope your chat.
             </p>
           </div>
@@ -336,10 +336,11 @@ export default function Projects({ projects: projectsProp, onReload }: ProjectsP
             </svg>
             New Project
           </button>
+          <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-pdi-sky via-pdi-ocean to-pdi-indigo opacity-60" />
         </div>
 
         {projects.length === 0 ? (
-          <div className="text-center py-16 text-gray-400">
+          <div className="text-center py-16 text-pdi-slate">
             <svg className="w-12 h-12 mx-auto mb-3 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
             </svg>
@@ -350,17 +351,17 @@ export default function Projects({ projects: projectsProp, onReload }: ProjectsP
             {projects.map((p) => (
               <div
                 key={p.id}
-                className="bg-white rounded-xl border border-gray-200 px-5 py-4 flex items-start justify-between gap-4"
+                className="bg-white rounded-xl border border-pdi-cool-gray px-5 py-4 flex items-start justify-between gap-4 hover:border-pdi-sky/30 hover:shadow-md transition-all"
               >
                 <div className="min-w-0">
-                  <h3 className="font-semibold text-gray-900 truncate">{p.name}</h3>
+                  <h3 className="font-semibold text-pdi-granite truncate">{p.name}</h3>
                   {p.description && (
-                    <p className="text-sm text-gray-500 mt-0.5 truncate">{p.description}</p>
+                    <p className="text-sm text-pdi-slate mt-0.5 truncate">{p.description}</p>
                   )}
                   <div className="mt-2">
                     {p.tag_filter && Object.keys(p.tag_filter.tags).length > 0 ? (
                       <div className="flex flex-wrap gap-1.5">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-pdi-slate">
                           {p.tag_filter.logic}
                         </span>
                         {Object.entries(p.tag_filter.tags).map(([k, v]) => (
@@ -373,7 +374,7 @@ export default function Projects({ projects: projectsProp, onReload }: ProjectsP
                         ))}
                       </div>
                     ) : (
-                      <span className="text-xs text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">
+                      <span className="text-xs text-pdi-sun bg-pdi-sun/10 px-2 py-0.5 rounded-full">
                         {filterSummary(p)}
                       </span>
                     )}
@@ -394,7 +395,7 @@ export default function Projects({ projects: projectsProp, onReload }: ProjectsP
                       <span className="text-xs text-gray-600">Delete?</span>
                       <button
                         onClick={() => handleDeleteConfirmed(p.id)}
-                        className="px-2 py-1 text-xs font-medium text-white bg-red-500 rounded hover:bg-red-600 transition-colors"
+                        className="px-2 py-1 text-xs font-medium text-white bg-pdi-orange rounded hover:bg-pdi-orange/90 transition-colors"
                       >
                         Yes
                       </button>
@@ -409,7 +410,7 @@ export default function Projects({ projects: projectsProp, onReload }: ProjectsP
                     <button
                       onClick={() => setConfirmDeleteId(p.id)}
                       disabled={deleting === p.id}
-                      className="p-1.5 text-gray-400 hover:text-red-500 transition-colors rounded disabled:opacity-40"
+                      className="p-1.5 text-gray-400 hover:text-pdi-orange transition-colors rounded disabled:opacity-40"
                       title="Delete"
                     >
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
