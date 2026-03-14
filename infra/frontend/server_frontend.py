@@ -560,7 +560,13 @@ def mount_frontend(app: FastAPI, config=None) -> None:
 
     @app.get("/api/webhooks")
     async def get_webhooks():
-        """Return webhook configuration status (which env vars are set)."""
+        """Return webhook configuration status (which env vars are set) and settings."""
+        from projects import get_webhook_settings_store  # noqa: PLC0415
+        wh_settings = get_webhook_settings_store().load_all()
+
+        def _wb(webhook_id: str) -> bool:
+            return wh_settings.get(webhook_id, {}).get("write_back_enabled", True)
+
         return JSONResponse({
             "webhooks": [
                 {
@@ -572,6 +578,11 @@ def mount_frontend(app: FastAPI, config=None) -> None:
                     "configured": bool(
                         os.environ.get("PAGERDUTY_WEBHOOK_SECRET")
                         or os.environ.get("PAGERDUTY_API_KEY")
+                    ),
+                    "write_back_enabled": _wb("pagerduty"),
+                    "write_back_capable": bool(
+                        os.environ.get("PAGERDUTY_API_KEY")
+                        and os.environ.get("PAGERDUTY_USER_EMAIL")
                     ),
                     "vars": {
                         "PAGERDUTY_WEBHOOK_SECRET": bool(os.environ.get("PAGERDUTY_WEBHOOK_SECRET")),
@@ -588,6 +599,11 @@ def mount_frontend(app: FastAPI, config=None) -> None:
                     "configured": bool(
                         os.environ.get("ADO_WEBHOOK_USERNAME")
                         or os.environ.get("ADO_PAT")
+                    ),
+                    "write_back_enabled": _wb("ado"),
+                    "write_back_capable": bool(
+                        os.environ.get("ADO_PAT")
+                        and os.environ.get("ADO_ORGANIZATION")
                     ),
                     "vars": {
                         "ADO_WEBHOOK_USERNAME": bool(os.environ.get("ADO_WEBHOOK_USERNAME")),
@@ -606,6 +622,11 @@ def mount_frontend(app: FastAPI, config=None) -> None:
                         os.environ.get("SALESFORCE_WEBHOOK_TOKEN")
                         or os.environ.get("SALESFORCE_INSTANCE_URL")
                     ),
+                    "write_back_enabled": _wb("salesforce"),
+                    "write_back_capable": bool(
+                        os.environ.get("SALESFORCE_INSTANCE_URL")
+                        and os.environ.get("SALESFORCE_ACCESS_TOKEN")
+                    ),
                     "vars": {
                         "SALESFORCE_WEBHOOK_TOKEN": bool(os.environ.get("SALESFORCE_WEBHOOK_TOKEN")),
                         "SALESFORCE_INSTANCE_URL": bool(os.environ.get("SALESFORCE_INSTANCE_URL")),
@@ -614,6 +635,21 @@ def mount_frontend(app: FastAPI, config=None) -> None:
                 },
             ]
         })
+
+    @app.put("/api/webhooks/{webhook_id}/settings")
+    async def update_webhook_settings(webhook_id: str, request: Request):
+        """Update per-webhook settings (e.g. write_back_enabled toggle)."""
+        valid_ids = {"pagerduty", "ado", "salesforce"}
+        if webhook_id not in valid_ids:
+            raise HTTPException(status_code=404, detail=f"Unknown webhook id: {webhook_id}")
+        body = await request.json()
+        write_back_enabled = bool(body.get("write_back_enabled", True))
+        from projects import get_webhook_settings_store  # noqa: PLC0415
+        get_webhook_settings_store().save(webhook_id, write_back_enabled)
+        logging.info(
+            "Webhook settings updated: %s write_back_enabled=%s", webhook_id, write_back_enabled
+        )
+        return JSONResponse({"ok": True, "webhook_id": webhook_id, "write_back_enabled": write_back_enabled})
 
     # ── LLM Instructions helpers ──────────────────────────────────────────────
 
@@ -1383,9 +1419,16 @@ def mount_frontend(app: FastAPI, config=None) -> None:
                 # ── 6. Write answer back to PagerDuty incident ────────────────
                 if answer and status == "completed":
                     try:
+                        from projects import get_webhook_settings_store  # noqa: PLC0415
+                        _wb_enabled = get_webhook_settings_store().get("pagerduty").get("write_back_enabled", True)
                         pd_api_key = os.environ.get("PAGERDUTY_API_KEY", "")
                         pd_user_email = os.environ.get("PAGERDUTY_USER_EMAIL", "")
-                        if pd_api_key and pd_user_email:
+                        if not _wb_enabled:
+                            logging.info(
+                                "PagerDuty webhook: write-back disabled by user setting — "
+                                "skipping note for incident %s", inc_id
+                            )
+                        elif pd_api_key and pd_user_email:
                             import requests as _requests  # noqa: PLC0415
                             note_body = f"**HolmesGPT Investigation**\n\n{answer}"
                             resp = _requests.post(
@@ -1411,7 +1454,7 @@ def mount_frontend(app: FastAPI, config=None) -> None:
                         else:
                             logging.info(
                                 "PagerDuty webhook: PAGERDUTY_API_KEY or PAGERDUTY_USER_EMAIL "
-                                "not set — skipping write-back for incident %s", inc_id
+                                "not configured — skipping write-back for incident %s", inc_id
                             )
                     except Exception:
                         logging.warning(
@@ -1597,9 +1640,16 @@ def mount_frontend(app: FastAPI, config=None) -> None:
             # ── 5. Write answer back to ADO work item as a comment ────────────
             if answer and status == "completed":
                 try:
+                    from projects import get_webhook_settings_store  # noqa: PLC0415
+                    _wb_enabled = get_webhook_settings_store().get("ado").get("write_back_enabled", True)
                     ado_pat = os.environ.get("ADO_PAT", "")
                     ado_org = os.environ.get("ADO_ORGANIZATION", "")
-                    if ado_pat and ado_org and wi_id:
+                    if not _wb_enabled:
+                        logging.info(
+                            "ADO webhook: write-back disabled by user setting — "
+                            "skipping comment for work item %s", wi_id
+                        )
+                    elif ado_pat and ado_org and wi_id:
                         import requests as _requests  # noqa: PLC0415
                         comment_html = f"<b>HolmesGPT Investigation</b><br><br>{answer.replace(chr(10), '<br>')}"
                         token_b64 = _base64.b64encode(f":{ado_pat}".encode()).decode()
@@ -1623,7 +1673,7 @@ def mount_frontend(app: FastAPI, config=None) -> None:
                             )
                     else:
                         logging.info(
-                            "ADO webhook: ADO_PAT or ADO_ORGANIZATION not set — "
+                            "ADO webhook: ADO_PAT or ADO_ORGANIZATION not configured — "
                             "skipping write-back for work item %s", wi_id
                         )
                 except Exception:
@@ -1808,9 +1858,16 @@ def mount_frontend(app: FastAPI, config=None) -> None:
             # ── 5. Write answer back to Salesforce Case as a comment ──────────
             if answer and status == "completed":
                 try:
+                    from projects import get_webhook_settings_store  # noqa: PLC0415
+                    _wb_enabled = get_webhook_settings_store().get("salesforce").get("write_back_enabled", True)
                     sf_instance_url = os.environ.get("SALESFORCE_INSTANCE_URL", "").rstrip("/")
                     sf_access_token = os.environ.get("SALESFORCE_ACCESS_TOKEN", "")
-                    if sf_instance_url and sf_access_token and c_id:
+                    if not _wb_enabled:
+                        logging.info(
+                            "Salesforce webhook: write-back disabled by user setting — "
+                            "skipping comment for case %s", c_id
+                        )
+                    elif sf_instance_url and sf_access_token and c_id:
                         import requests as _requests  # noqa: PLC0415
                         comment_body = f"HolmesGPT Investigation\n\n{answer}"
                         resp = _requests.post(
@@ -1838,7 +1895,7 @@ def mount_frontend(app: FastAPI, config=None) -> None:
                     else:
                         logging.info(
                             "Salesforce webhook: SALESFORCE_INSTANCE_URL or SALESFORCE_ACCESS_TOKEN "
-                            "not set — skipping write-back for case %s", c_id
+                            "not configured — skipping write-back for case %s", c_id
                         )
                 except Exception:
                     logging.warning(

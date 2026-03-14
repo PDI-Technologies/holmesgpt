@@ -318,6 +318,50 @@ def get_toolset_state_store() -> ToolsetStateStore:
     return _toolset_state_store
 
 
+# ── Webhook settings store ─────────────────────────────────────────────────────
+
+
+class WebhookSettingsStore:
+    """Persist per-webhook settings (e.g. write_back_enabled) across pod restarts."""
+
+    def load_all(self) -> dict[str, dict]:
+        """Return {webhook_id: {setting_key: value}} for all stored webhook settings."""
+        resp = _get_table().query(
+            KeyConditionExpression=Key("pk").eq("WEBHOOK_SETTINGS"),
+        )
+        result: dict[str, dict] = {}
+        for item in resp.get("Items", []):
+            webhook_id = item["sk"]
+            result[webhook_id] = {
+                "write_back_enabled": item.get("write_back_enabled", True),
+            }
+        return result
+
+    def get(self, webhook_id: str) -> dict:
+        """Return settings for a single webhook, with defaults if not stored."""
+        resp = _get_table().get_item(Key={"pk": "WEBHOOK_SETTINGS", "sk": webhook_id})
+        item = resp.get("Item")
+        if not item:
+            return {"write_back_enabled": True}
+        return {"write_back_enabled": item.get("write_back_enabled", True)}
+
+    def save(self, webhook_id: str, write_back_enabled: bool) -> None:
+        _get_table().put_item(
+            Item={
+                "pk": "WEBHOOK_SETTINGS",
+                "sk": webhook_id,
+                "write_back_enabled": write_back_enabled,
+            }
+        )
+
+
+_webhook_settings_store = WebhookSettingsStore()
+
+
+def get_webhook_settings_store() -> WebhookSettingsStore:
+    return _webhook_settings_store
+
+
 # ── Investigation history store ────────────────────────────────────────────────
 
 

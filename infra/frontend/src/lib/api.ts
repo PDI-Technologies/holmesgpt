@@ -120,6 +120,8 @@ export interface WebhookInfo {
   trigger: string;
   configured: boolean;
   vars: Record<string, boolean>;
+  write_back_enabled: boolean;
+  write_back_capable: boolean;
 }
 
 export interface WebhooksResponse {
@@ -348,6 +350,14 @@ export const api = {
 
   getWebhooks(): Promise<WebhooksResponse> {
     return request('/api/webhooks');
+  },
+
+  updateWebhookSettings(webhookId: string, settings: { write_back_enabled: boolean }): Promise<{ ok: boolean; webhook_id: string; write_back_enabled: boolean }> {
+    return request(`/api/webhooks/${webhookId}/settings`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(settings),
+    });
   },
 
   getLlmInstructions(): Promise<LlmInstructionsResponse> {

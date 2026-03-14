@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { api, type Integration, type AwsAccount, type Instance, type ConfigField } from '../lib/api'
+import { api, type Integration, type AwsAccount, type Instance, type ConfigField, type WebhookInfo } from '../lib/api'
 
 type StatusFilter = 'all' | 'enabled' | 'disabled' | 'failed'
 type TypeFilter = 'all' | 'built-in' | 'mcp' | 'custom' | 'http' | 'database'
@@ -744,15 +744,22 @@ export default function Integrations() {
   const [configuring, setConfiguring] = useState<Integration | null>(null)
   const [awsAccounts, setAwsAccounts] = useState<AwsAccount[]>([])
   const [allInstances, setAllInstances] = useState<Instance[]>([])
+  const [webhooks, setWebhooks] = useState<WebhookInfo[]>([])
+  const [webhookTogglingId, setWebhookTogglingId] = useState<string | null>(null)
 
   const loadInstances = () => {
     api.listInstances().then(setAllInstances).catch(() => {})
+  }
+
+  const loadWebhooks = () => {
+    api.getWebhooks().then((data) => setWebhooks(data.webhooks)).catch(() => {})
   }
 
   useEffect(() => {
     loadIntegrations()
     api.getAwsAccounts().then((data) => setAwsAccounts(data.accounts)).catch(() => {})
     loadInstances()
+    loadWebhooks()
   }, [])
 
   async function loadIntegrations() {
@@ -775,6 +782,21 @@ export default function Integrations() {
       await loadIntegrations()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to toggle integration')
+    }
+  }
+
+  async function handleWebhookWriteBackToggle(webhookId: string, enabled: boolean) {
+    setWebhookTogglingId(webhookId)
+    try {
+      await api.updateWebhookSettings(webhookId, { write_back_enabled: enabled })
+      setWebhooks((prev) =>
+        prev.map((w) => (w.id === webhookId ? { ...w, write_back_enabled: enabled } : w))
+      )
+    } catch {
+      // reload to get accurate state on error
+      loadWebhooks()
+    } finally {
+      setWebhookTogglingId(null)
     }
   }
 
@@ -892,6 +914,74 @@ export default function Integrations() {
           {!loading && filtered.length === 0 && integrations.length > 0 && (
             <div className="text-center py-12 text-pdi-slate text-sm">
               No integrations match the current filters.
+            </div>
+          )}
+
+          {/* Webhooks section */}
+          {webhooks.length > 0 && (
+            <div>
+              <div className="mb-3">
+                <h3 className="text-sm font-semibold text-pdi-granite">Webhook Integrations</h3>
+                <p className="text-xs text-pdi-slate mt-0.5">
+                  External systems that trigger Holmes investigations. Toggle write-back to control whether Holmes posts results back to the originating system.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {webhooks.map((wh) => (
+                  <div key={wh.id} className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 flex flex-col gap-3">
+                    {/* Header row */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-semibold text-pdi-granite">{wh.name}</p>
+                        <p className="text-[11px] text-pdi-slate font-mono mt-0.5">{wh.url}</p>
+                      </div>
+                      <span className={`flex-shrink-0 inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full ${wh.configured ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-pdi-slate'}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${wh.configured ? 'bg-pdi-grass' : 'bg-pdi-slate'}`} />
+                        {wh.configured ? 'Configured' : 'Not configured'}
+                      </span>
+                    </div>
+
+                    {/* Auth / trigger info */}
+                    <div className="flex gap-2 flex-wrap">
+                      <span className="text-[10px] bg-gray-50 border border-gray-200 rounded px-1.5 py-0.5 text-pdi-slate font-mono">
+                        {wh.auth_type}
+                      </span>
+                      <span className="text-[10px] bg-gray-50 border border-gray-200 rounded px-1.5 py-0.5 text-pdi-slate font-mono">
+                        {wh.trigger}
+                      </span>
+                    </div>
+
+                    {/* Write-back toggle */}
+                    <div className="border-t border-gray-100 pt-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <p className="text-xs font-medium text-pdi-granite">Post results back</p>
+                          {!wh.write_back_capable ? (
+                            <p className="text-[10px] text-amber-600 mt-0.5">
+                              Requires write credentials in env vars
+                            </p>
+                          ) : (
+                            <p className="text-[10px] text-pdi-slate mt-0.5">
+                              {wh.write_back_enabled ? 'Holmes will comment on resolved items' : 'Write-back disabled'}
+                            </p>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          disabled={!wh.write_back_capable || webhookTogglingId === wh.id}
+                          onClick={() => handleWebhookWriteBackToggle(wh.id, !wh.write_back_enabled)}
+                          className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed ${wh.write_back_enabled && wh.write_back_capable ? 'bg-pdi-sky' : 'bg-gray-200'}`}
+                          title={!wh.write_back_capable ? 'Write credentials not configured' : (wh.write_back_enabled ? 'Disable write-back' : 'Enable write-back')}
+                        >
+                          <span
+                            className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${wh.write_back_enabled && wh.write_back_capable ? 'translate-x-4' : 'translate-x-0'}`}
+                          />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>
