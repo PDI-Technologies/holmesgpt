@@ -1,12 +1,12 @@
-# Locals to decode Secrets Manager values for use in this file
+# Locals to decode Secrets Manager values for use in this file.
+# Only read back secrets that already existed before this PR (mcp_keys, ui_creds, grafana).
+# New secrets (datadog, pagerduty, ado_webhook, salesforce_webhook) are referenced directly
+# from variables to avoid data-source read failures on first apply when the secrets don't
+# exist in AWS yet.
 locals {
   mcp_keys          = jsondecode(data.aws_secretsmanager_secret_version.mcp_api_keys.secret_string)
   ui_creds          = jsondecode(data.aws_secretsmanager_secret_version.holmes_ui_credentials.secret_string)
   grafana           = jsondecode(data.aws_secretsmanager_secret_version.grafana.secret_string)
-  datadog           = jsondecode(data.aws_secretsmanager_secret_version.datadog.secret_string)
-  pagerduty         = jsondecode(data.aws_secretsmanager_secret_version.pagerduty.secret_string)
-  ado_webhook       = jsondecode(data.aws_secretsmanager_secret_version.ado_webhook.secret_string)
-  salesforce_webhook = jsondecode(data.aws_secretsmanager_secret_version.salesforce_webhook.secret_string)
 }
 
 # Kubernetes namespace for Holmes
@@ -35,19 +35,19 @@ resource "kubernetes_secret" "holmes_api_keys" {
     MCP_SALESFORCE_API_KEY = local.mcp_keys["MCP_SALESFORCE_API_KEY"]
     GRAFANA_API_KEY        = local.grafana["GRAFANA_API_KEY"]
     GRAFANA_URL            = local.grafana["GRAFANA_URL"]
-    DATADOG_API_KEY        = local.datadog["DATADOG_API_KEY"]
-    DATADOG_APP_KEY        = local.datadog["DATADOG_APP_KEY"]
-    DATADOG_API_URL        = local.datadog["DATADOG_API_URL"]
-    PAGERDUTY_API_KEY        = local.pagerduty["PAGERDUTY_API_KEY"]
-    PAGERDUTY_USER_EMAIL     = local.pagerduty["PAGERDUTY_USER_EMAIL"]
-    PAGERDUTY_WEBHOOK_SECRET = local.pagerduty["PAGERDUTY_WEBHOOK_SECRET"]
-    ADO_WEBHOOK_USERNAME     = local.ado_webhook["ADO_WEBHOOK_USERNAME"]
-    ADO_WEBHOOK_PASSWORD     = local.ado_webhook["ADO_WEBHOOK_PASSWORD"]
-    ADO_PAT                  = local.ado_webhook["ADO_PAT"]
-    ADO_ORGANIZATION         = local.ado_webhook["ADO_ORGANIZATION"]
-    SALESFORCE_WEBHOOK_TOKEN = local.salesforce_webhook["SALESFORCE_WEBHOOK_TOKEN"]
-    SALESFORCE_INSTANCE_URL  = local.salesforce_webhook["SALESFORCE_INSTANCE_URL"]
-    SALESFORCE_ACCESS_TOKEN  = local.salesforce_webhook["SALESFORCE_ACCESS_TOKEN"]
+    DATADOG_API_KEY        = var.datadog_api_key
+    DATADOG_APP_KEY        = var.datadog_app_key
+    DATADOG_API_URL        = var.datadog_api_url
+    PAGERDUTY_API_KEY        = var.pagerduty_api_key
+    PAGERDUTY_USER_EMAIL     = var.pagerduty_user_email
+    PAGERDUTY_WEBHOOK_SECRET = var.pagerduty_webhook_secret
+    ADO_WEBHOOK_USERNAME     = var.ado_webhook_username
+    ADO_WEBHOOK_PASSWORD     = var.ado_webhook_password
+    ADO_PAT                  = var.ado_pat
+    ADO_ORGANIZATION         = var.ado_organization
+    SALESFORCE_WEBHOOK_TOKEN = var.salesforce_webhook_token
+    SALESFORCE_INSTANCE_URL  = var.salesforce_instance_url
+    SALESFORCE_ACCESS_TOKEN  = var.salesforce_access_token
   }
 
   type = "Opaque"
