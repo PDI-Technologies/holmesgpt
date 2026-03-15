@@ -155,6 +155,9 @@ jobs:
     env:
       IS_PROD: ${{ matrix.env == 'prod' }}
       RUN_APPLY: ${{ (github.event_name == 'push' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/heads/release/'))) || github.event.inputs.action == 'apply' }}
+      # Gate all AWS steps on credentials being present.
+      # Without this, the job fails on Configure AWS credentials when secrets aren't set.
+      HAVE_CREDS: ${{ (matrix.env == 'prod' && secrets.PDI_PROD_AWS_ACCESS_KEY_ID != '') || (matrix.env != 'prod' && secrets.PDI_AWS_ACCESS_KEY_ID != '') }}
 
     permissions:
       contents: read
@@ -196,6 +199,7 @@ jobs:
           fi
 
       - name: Configure AWS credentials
+        if: env.HAVE_CREDS == 'true'
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
@@ -205,6 +209,7 @@ jobs:
       # ── Install OpenTofu ──────────────────────────────────────────────────────
 
       - name: Install OpenTofu ${{ env.TOFU_VERSION }}
+        if: env.HAVE_CREDS == 'true'
         run: |
           curl -fsSL https://get.opentofu.org/install-opentofu.sh | \
             sudo env OPENTOFU_VERSION=${{ env.TOFU_VERSION }} bash -s -- --install-method deb
@@ -213,6 +218,7 @@ jobs:
       # ── Update kubeconfig (needed by helm/kubernetes providers) ──────────────
 
       - name: Update kubeconfig for EKS
+        if: env.HAVE_CREDS == 'true'
         run: |
           CLUSTER_NAME="holmesgpt-${{ matrix.env }}"
           aws eks update-kubeconfig \
@@ -223,6 +229,7 @@ jobs:
       # We inject the S3 backend config at init time using -backend-config flags.
 
       - name: OpenTofu init
+        if: env.HAVE_CREDS == 'true'
         working-directory: infra
         run: |
           tofu init \
@@ -237,6 +244,7 @@ jobs:
       # ── Plan ──────────────────────────────────────────────────────────────────
 
       - name: OpenTofu plan (${{ matrix.env }})
+        if: env.HAVE_CREDS == 'true'
         id: plan
         working-directory: infra
         run: |
@@ -266,7 +274,7 @@ jobs:
       # ── Post plan as PR comment ───────────────────────────────────────────────
 
       - name: Post plan to PR (${{ matrix.env }})
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && env.HAVE_CREDS == 'true'
         uses: actions/github-script@v7
         with:
           script: |
@@ -320,7 +328,7 @@ jobs:
       # ── Apply ─────────────────────────────────────────────────────────────────
 
       - name: OpenTofu apply (${{ matrix.env }})
-        if: env.RUN_APPLY == 'true'
+        if: env.RUN_APPLY == 'true' && env.HAVE_CREDS == 'true'
         working-directory: infra
         run: |
           tofu apply \
@@ -346,7 +354,11 @@ jobs:
           echo "## PDI IaC Summary — \`$ENV\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
-          if [ "$RUN_APPLY" = "true" ]; then
+          if [ "$HAVE_CREDS" != "true" ]; then
+            echo "### ⏭️ Skipped — AWS credentials not configured" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "> Set the required GitHub Secrets to enable IaC runs (see workflow header comments)." >> $GITHUB_STEP_SUMMARY
+          elif [ "$RUN_APPLY" = "true" ]; then
             echo "### ✅ Apply completed" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "\`\`\`" >> $GITHUB_STEP_SUMMARY

@@ -76,8 +76,7 @@ jobs:
           poetry run isort \
             --check-only \
             --profile black \
-            --skip-glob "holmes/main.py" \
-            --skip-glob "server.py" \
+            --skip "server.py" \
             .
 
       - name: mypy type check
@@ -154,13 +153,13 @@ jobs:
             -r /tmp/requirements.txt \
             --skip-editable \
             --ignore-vuln CVE-2026-25990 \
-            --output /tmp/pip_audit_report.txt \
-            --format columns || true
-          cat /tmp/pip_audit_report.txt
-          # Fail on any unfixed vulnerability
-          if grep -qE "^[a-zA-Z]" /tmp/pip_audit_report.txt && \
-             ! grep -q "No known vulnerabilities found" /tmp/pip_audit_report.txt; then
-            echo "❌ pip-audit found vulnerabilities — review /tmp/pip_audit_report.txt"
+            --format columns \
+            2>&1 | tee /tmp/pip_audit_report.txt
+          # pip-audit exits 0 when all vulns are suppressed or none found.
+          # The tee above preserves the exit code via PIPESTATUS.
+          AUDIT_EXIT=${PIPESTATUS[0]}
+          if [ $AUDIT_EXIT -ne 0 ]; then
+            echo "❌ pip-audit found vulnerabilities — review output above"
             exit 1
           fi
 
@@ -294,6 +293,7 @@ jobs:
           ignore-unfixed: true
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH'
+          trivyignores: .trivyignore
           output: /tmp/trivy_vuln_report.txt
 
       - name: Trivy secret scan
