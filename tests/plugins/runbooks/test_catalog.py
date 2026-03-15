@@ -1,4 +1,3 @@
-
 from holmes.plugins.runbooks import (
     load_runbook_catalog,
 )
