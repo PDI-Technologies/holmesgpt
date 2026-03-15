@@ -145,10 +145,15 @@ jobs:
       - name: pip-audit dependency CVE scan
         # --ignore-vuln: suppress known false-positives or accepted risks.
         # Remove entries from this list only after reviewing the CVE.
+        #
+        # Accepted risks (cannot upgrade without breaking other dependencies):
+        #   CVE-2026-25990 (pillow 10.4.0): fix requires pillow>=12.1.1, but
+        #     prometrix==0.2.9 pins pillow<11.0.0. Upstream issue — no PDI fix available.
         run: |
           pip-audit \
             -r /tmp/requirements.txt \
             --skip-editable \
+            --ignore-vuln CVE-2026-25990 \
             --output /tmp/pip_audit_report.txt \
             --format columns || true
           cat /tmp/pip_audit_report.txt
