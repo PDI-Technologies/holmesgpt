@@ -5,9 +5,9 @@ type StatusFilter = 'all' | 'enabled' | 'disabled' | 'failed'
 type TypeFilter = 'all' | 'built-in' | 'mcp' | 'custom' | 'http' | 'database'
 
 const STATUS_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
-  enabled: { bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-pdi-grass' },
+  enabled: { bg: 'bg-pdi-grass/10', text: 'text-pdi-grass', dot: 'bg-pdi-grass' },
   disabled: { bg: 'bg-gray-100', text: 'text-pdi-slate', dot: 'bg-pdi-slate' },
-  failed: { bg: 'bg-red-50', text: 'text-pdi-orange', dot: 'bg-pdi-orange' },
+  failed: { bg: 'bg-pdi-orange/10', text: 'text-pdi-orange', dot: 'bg-pdi-orange' },
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -58,20 +58,20 @@ function TagsEditor({
             placeholder="key"
             value={k}
             onChange={(e) => updateKey(k, e.target.value)}
-            className="w-28 text-xs border border-gray-200 rounded-md px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-pdi-sky font-mono"
+            className="w-28 text-xs border border-pdi-cool-gray rounded-md px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-pdi-sky font-mono"
           />
-          <span className="text-gray-400 text-xs">=</span>
+          <span className="text-pdi-slate text-xs">=</span>
           <input
             type="text"
             placeholder="value"
             value={v}
             onChange={(e) => updateValue(k, e.target.value)}
-            className="flex-1 text-xs border border-gray-200 rounded-md px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-pdi-sky font-mono"
+            className="flex-1 text-xs border border-pdi-cool-gray rounded-md px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-pdi-sky font-mono"
           />
           <button
             type="button"
             onClick={() => removeTag(k)}
-            className="text-gray-400 hover:text-red-500 transition-colors"
+            className="text-pdi-slate hover:text-pdi-orange transition-colors"
           >
             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -90,7 +90,7 @@ function TagsEditor({
         Add tag
       </button>
       {entries.length === 0 && (
-        <p className="text-[11px] text-amber-600 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+        <p className="text-[11px] text-pdi-sun bg-pdi-sun/10 border border-pdi-sun/20 rounded px-2 py-1">
           No tags — this instance will be <strong>global</strong> (available to all projects)
         </p>
       )}
@@ -197,7 +197,7 @@ function InstanceForm({
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="e.g. grafana-retail-prod"
-          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-pdi-sky"
+          className="w-full px-3 py-2 border border-pdi-cool-gray rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-pdi-sky"
         />
       </div>
 
@@ -232,7 +232,7 @@ function InstanceForm({
                 <select
                   value={fields[field.name] || ''}
                   onChange={(e) => setFields({ ...fields, [field.name]: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pdi-sky"
+                  className="w-full px-3 py-2 border border-pdi-cool-gray rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pdi-sky"
                 >
                   <option value="">— not set —</option>
                   <option value="true">true</option>
@@ -244,7 +244,7 @@ function InstanceForm({
                   value={fields[field.name] || ''}
                   onChange={(e) => setFields({ ...fields, [field.name]: e.target.value })}
                   placeholder={field.default !== null && field.default !== undefined ? `Default: ${field.default}` : `Enter ${field.name}`}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-pdi-sky font-mono"
+                  className="w-full px-3 py-2 border border-pdi-cool-gray rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-pdi-sky font-mono"
                 />
               )}
             </div>
@@ -262,7 +262,7 @@ function InstanceForm({
         <button
           type="button"
           onClick={onCancel}
-          className="px-3 py-1.5 text-xs text-pdi-slate border border-gray-200 rounded-lg hover:bg-gray-50"
+          className="px-3 py-1.5 text-xs text-pdi-slate border border-pdi-cool-gray rounded-lg hover:bg-gray-50"
         >
           Cancel
         </button>
@@ -365,32 +365,32 @@ function InstancesTab({
 
       {/* Auto-migration prompt */}
       {showMigrationPrompt && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-2">
+        <div className="bg-pdi-sun/5 border border-pdi-sun/20 rounded-xl p-4 space-y-2">
           <div className="flex items-start gap-2">
-            <svg className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <svg className="w-4 h-4 text-pdi-sun shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
             </svg>
             <div>
-              <p className="text-xs font-semibold text-amber-800">Existing configuration detected</p>
-              <p className="text-xs text-amber-700 mt-0.5">
+              <p className="text-xs font-semibold text-pdi-sun">Existing configuration detected</p>
+              <p className="text-xs text-pdi-sun/80 mt-0.5">
                 This integration has configuration but no instances yet. Create a global instance from the existing config so it works with all projects.
               </p>
             </div>
           </div>
           {migrateError && (
-            <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-2 py-1">{migrateError}</p>
+            <p className="text-xs text-pdi-orange bg-pdi-orange/10 border border-pdi-orange/20 rounded px-2 py-1">{migrateError}</p>
           )}
           <div className="flex gap-2 justify-end">
             <button
               onClick={() => setEditingInstance(null)}
-              className="text-xs text-amber-700 hover:text-amber-900 px-3 py-1.5 border border-amber-300 rounded-lg"
+              className="text-xs text-pdi-sun hover:text-pdi-sun/80 px-3 py-1.5 border border-pdi-sun/30 rounded-lg"
             >
               Configure manually
             </button>
             <button
               onClick={handleMigrate}
               disabled={migrating}
-              className="text-xs text-white bg-amber-600 hover:bg-amber-700 px-3 py-1.5 rounded-lg disabled:opacity-50"
+              className="text-xs text-white bg-pdi-sun hover:bg-pdi-sun/90 px-3 py-1.5 rounded-lg disabled:opacity-50"
             >
               {migrating ? 'Creating…' : 'Create global instance'}
             </button>
@@ -431,12 +431,12 @@ function InstancesTab({
                   onCancel={() => setEditingInstance(undefined)}
                 />
               ) : (
-                <div className="flex items-start justify-between gap-3 bg-white border border-gray-200 rounded-lg px-3 py-2.5">
+                <div className="flex items-start justify-between gap-3 bg-white border border-pdi-cool-gray rounded-lg px-3 py-2.5">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-sm font-medium text-pdi-granite">{inst.name}</span>
                       {Object.keys(inst.tags).length === 0 ? (
-                        <span className="text-[10px] font-medium bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">
+                        <span className="text-[10px] font-medium bg-pdi-sun/15 text-pdi-sun px-1.5 py-0.5 rounded-full">
                           global
                         </span>
                       ) : (
@@ -456,16 +456,16 @@ function InstancesTab({
                   <div className="flex items-center gap-1 shrink-0">
                     {confirmDeleteId === inst.id ? (
                       <>
-                        <span className="text-xs text-gray-600">Delete?</span>
+                        <span className="text-xs text-pdi-slate">Delete?</span>
                         <button
                           onClick={() => handleDeleteConfirmed(inst.id)}
-                          className="px-2 py-1 text-xs font-medium text-white bg-red-500 rounded hover:bg-red-600 transition-colors"
+                          className="px-2 py-1 text-xs font-medium text-white bg-pdi-orange rounded hover:bg-pdi-orange/90 transition-colors"
                         >
                           Yes
                         </button>
                         <button
                           onClick={() => setConfirmDeleteId(null)}
-                          className="px-2 py-1 text-xs font-medium text-gray-600 bg-gray-100 rounded hover:bg-gray-200 transition-colors"
+                          className="px-2 py-1 text-xs font-medium text-pdi-slate bg-gray-100 rounded hover:bg-gray-200 transition-colors"
                         >
                           No
                         </button>
@@ -474,7 +474,7 @@ function InstancesTab({
                       <>
                         <button
                           onClick={() => setEditingInstance(inst)}
-                          className="p-1 text-gray-400 hover:text-pdi-sky transition-colors rounded"
+                          className="p-1 text-pdi-slate hover:text-pdi-sky transition-colors rounded"
                           title="Edit"
                         >
                           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -484,7 +484,7 @@ function InstancesTab({
                         <button
                           onClick={() => setConfirmDeleteId(inst.id)}
                           disabled={deleting === inst.id}
-                          className="p-1 text-gray-400 hover:text-red-500 transition-colors rounded disabled:opacity-40"
+                          className="p-1 text-pdi-slate hover:text-pdi-orange transition-colors rounded disabled:opacity-40"
                           title="Delete"
                         >
                           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -520,7 +520,7 @@ function ConfigModal({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+        <div className="px-6 py-4 border-b border-pdi-cool-gray flex items-center justify-between">
           <div className="flex items-center gap-3">
             {integration.icon_url ? (
               <img src={integration.icon_url} alt="" className="w-7 h-7 rounded-lg object-contain"
@@ -554,10 +554,10 @@ function ConfigModal({
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-end">
+        <div className="px-6 py-4 border-t border-pdi-cool-gray flex items-center justify-end">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm text-pdi-slate hover:text-pdi-granite border border-gray-200 rounded-lg"
+            className="px-4 py-2 text-sm text-pdi-slate hover:text-pdi-granite border border-pdi-cool-gray rounded-lg"
           >
             Close
           </button>
@@ -595,7 +595,7 @@ function IntegrationCard({
   }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 flex flex-col gap-3">
+    <div className="bg-white rounded-xl border border-pdi-cool-gray shadow-sm p-5 flex flex-col gap-3">
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
           {integration.icon_url ? (
@@ -688,7 +688,7 @@ function IntegrationCard({
               >
                 {inst.name}
                 {Object.keys(inst.tags).length === 0 ? (
-                  <span className="text-amber-600 font-normal">(global)</span>
+                  <span className="text-pdi-sky/60 font-normal">(global)</span>
                 ) : (
                   <span className="text-pdi-slate font-mono font-normal">
                     {Object.entries(inst.tags).map(([k, v]) => `${k}=${v}`).join(' ')}
@@ -700,7 +700,7 @@ function IntegrationCard({
         </div>
       )}
 
-      <div className="flex items-center justify-between mt-auto pt-2 border-t border-gray-100">
+      <div className="flex items-center justify-between mt-auto pt-2 border-t border-pdi-cool-gray">
         <span className="text-[11px] text-pdi-slate">
           {integration.tool_count} tool{integration.tool_count !== 1 ? 's' : ''}
         </span>
@@ -813,7 +813,7 @@ export default function Integrations() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="px-6 py-4 border-b border-gray-200 bg-white">
+      <div className="relative px-6 py-4 border-b border-pdi-cool-gray bg-white">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-lg font-bold text-pdi-granite">Integrations</h2>
@@ -827,23 +827,24 @@ export default function Integrations() {
             {loading ? 'Refreshing...' : 'Refresh'}
           </button>
         </div>
+        <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-pdi-sky via-pdi-ocean to-pdi-indigo opacity-60" />
       </div>
 
       <div className="flex-1 overflow-y-auto px-6 py-6">
         <div className="max-w-5xl space-y-6">
           {/* Summary cards */}
           <div className="grid grid-cols-3 gap-4">
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+            <div className="bg-white rounded-xl border border-pdi-cool-gray shadow-sm p-4">
               <p className="text-xs text-pdi-slate font-medium">Active</p>
               <p className="text-2xl font-bold text-pdi-grass mt-1">{enabledCount}</p>
               <p className="text-[11px] text-pdi-slate mt-0.5">of {integrations.length} total</p>
             </div>
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+            <div className="bg-white rounded-xl border border-pdi-cool-gray shadow-sm p-4">
               <p className="text-xs text-pdi-slate font-medium">Failed</p>
               <p className={`text-2xl font-bold mt-1 ${failedCount > 0 ? 'text-pdi-orange' : 'text-pdi-granite'}`}>{failedCount}</p>
               <p className="text-[11px] text-pdi-slate mt-0.5">need attention</p>
             </div>
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+            <div className="bg-white rounded-xl border border-pdi-cool-gray shadow-sm p-4">
               <p className="text-xs text-pdi-slate font-medium">MCP Servers</p>
               <p className="text-2xl font-bold text-pdi-ocean mt-1">{mcpCount}</p>
               <p className="text-[11px] text-pdi-slate mt-0.5">external integrations</p>
@@ -855,7 +856,7 @@ export default function Integrations() {
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-              className="text-xs border border-gray-200 rounded-lg px-3 py-1.5 text-pdi-granite bg-white focus:outline-none focus:ring-1 focus:ring-pdi-sky"
+              className="text-xs border border-pdi-cool-gray rounded-lg px-3 py-1.5 text-pdi-granite bg-white focus:outline-none focus:ring-1 focus:ring-pdi-sky"
             >
               <option value="all">All statuses</option>
               <option value="enabled">Enabled</option>
@@ -865,7 +866,7 @@ export default function Integrations() {
             <select
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value as TypeFilter)}
-              className="text-xs border border-gray-200 rounded-lg px-3 py-1.5 text-pdi-granite bg-white focus:outline-none focus:ring-1 focus:ring-pdi-sky"
+              className="text-xs border border-pdi-cool-gray rounded-lg px-3 py-1.5 text-pdi-granite bg-white focus:outline-none focus:ring-1 focus:ring-pdi-sky"
             >
               <option value="all">All types</option>
               <option value="built-in">Built-in</option>
@@ -928,14 +929,14 @@ export default function Integrations() {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {webhooks.map((wh) => (
-                  <div key={wh.id} className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 flex flex-col gap-3">
+                  <div key={wh.id} className="bg-white rounded-xl border border-pdi-cool-gray shadow-sm p-4 flex flex-col gap-3">
                     {/* Header row */}
                     <div className="flex items-start justify-between gap-2">
                       <div>
                         <p className="text-sm font-semibold text-pdi-granite">{wh.name}</p>
                         <p className="text-[11px] text-pdi-slate font-mono mt-0.5">{wh.url}</p>
                       </div>
-                      <span className={`flex-shrink-0 inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full ${wh.configured ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-pdi-slate'}`}>
+                      <span className={`flex-shrink-0 inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full ${wh.configured ? 'bg-pdi-grass/10 text-pdi-grass' : 'bg-gray-100 text-pdi-slate'}`}>
                         <span className={`w-1.5 h-1.5 rounded-full ${wh.configured ? 'bg-pdi-grass' : 'bg-pdi-slate'}`} />
                         {wh.configured ? 'Configured' : 'Not configured'}
                       </span>
@@ -943,21 +944,21 @@ export default function Integrations() {
 
                     {/* Auth / trigger info */}
                     <div className="flex gap-2 flex-wrap">
-                      <span className="text-[10px] bg-gray-50 border border-gray-200 rounded px-1.5 py-0.5 text-pdi-slate font-mono">
+                      <span className="text-[10px] bg-gray-50 border border-pdi-cool-gray rounded px-1.5 py-0.5 text-pdi-slate font-mono">
                         {wh.auth_type}
                       </span>
-                      <span className="text-[10px] bg-gray-50 border border-gray-200 rounded px-1.5 py-0.5 text-pdi-slate font-mono">
+                      <span className="text-[10px] bg-gray-50 border border-pdi-cool-gray rounded px-1.5 py-0.5 text-pdi-slate font-mono">
                         {wh.trigger}
                       </span>
                     </div>
 
                     {/* Write-back toggle */}
-                    <div className="border-t border-gray-100 pt-3">
+                    <div className="border-t border-pdi-cool-gray pt-3">
                       <div className="flex items-center justify-between gap-2">
                         <div>
                           <p className="text-xs font-medium text-pdi-granite">Post results back</p>
                           {!wh.write_back_capable ? (
-                            <p className="text-[10px] text-amber-600 mt-0.5">
+                            <p className="text-[10px] text-pdi-sun mt-0.5">
                               Requires write credentials in env vars
                             </p>
                           ) : (
