@@ -403,7 +403,7 @@ export default function Docs() {
                   <p className="text-xs font-medium text-blue-700 uppercase tracking-wider">Admin setup (k8s secret)</p>
                   <pre className="bg-white border border-blue-200 rounded px-3 py-2 text-xs text-gray-700 overflow-x-auto">{`kubectl patch secret holmes-api-keys -n holmesgpt \\\n  --type=merge -p '{"stringData":{"PAGERDUTY_WEBHOOK_SECRET":"<secret>"}}'`}</pre>
                 </div>
-                <p className="text-xs text-blue-600">Authentication is enforced only when <code className="bg-blue-100 px-1 py-0.5 rounded">PAGERDUTY_WEBHOOK_SECRET</code> is set. If the variable is empty, all requests are accepted (development mode).</p>
+                <p className="text-xs text-blue-600">Authentication is enforced when <code className="bg-blue-100 px-1 py-0.5 rounded">PAGERDUTY_WEBHOOK_SECRET</code> is set and Development Mode is off. To bypass authentication during testing, enable <strong>Development Mode</strong> in <strong>Settings → Webhooks</strong>.</p>
               </div>
             </div>
           )}
@@ -455,7 +455,7 @@ export default function Docs() {
                   <p className="text-xs font-medium text-blue-700 uppercase tracking-wider">Admin setup (k8s secret)</p>
                   <pre className="bg-white border border-blue-200 rounded px-3 py-2 text-xs text-gray-700 overflow-x-auto">{`kubectl patch secret holmes-api-keys -n holmesgpt \\\n  --type=merge -p '{"stringData":{"ADO_WEBHOOK_USERNAME":"<user>","ADO_WEBHOOK_PASSWORD":"<pass>"}}'`}</pre>
                 </div>
-                <p className="text-xs text-blue-600">Authentication is enforced only when <code className="bg-blue-100 px-1 py-0.5 rounded">ADO_WEBHOOK_USERNAME</code> or <code className="bg-blue-100 px-1 py-0.5 rounded">ADO_WEBHOOK_PASSWORD</code> is set. If both are empty, all requests are accepted (development mode).</p>
+                <p className="text-xs text-blue-600">Authentication is enforced when <code className="bg-blue-100 px-1 py-0.5 rounded">ADO_WEBHOOK_USERNAME</code> or <code className="bg-blue-100 px-1 py-0.5 rounded">ADO_WEBHOOK_PASSWORD</code> is set and Development Mode is off. To bypass authentication during testing, enable <strong>Development Mode</strong> in <strong>Settings → Webhooks</strong>.</p>
               </div>
             </div>
           )}
@@ -508,7 +508,7 @@ export default function Docs() {
                   <p className="text-xs font-medium text-blue-700 uppercase tracking-wider">Admin setup (k8s secret)</p>
                   <pre className="bg-white border border-blue-200 rounded px-3 py-2 text-xs text-gray-700 overflow-x-auto">{`kubectl patch secret holmes-api-keys -n holmesgpt \\\n  --type=merge -p '{"stringData":{"SALESFORCE_WEBHOOK_TOKEN":"<token>"}}'`}</pre>
                 </div>
-                <p className="text-xs text-blue-600">Authentication is enforced only when <code className="bg-blue-100 px-1 py-0.5 rounded">SALESFORCE_WEBHOOK_TOKEN</code> is set. If the variable is empty, all requests are accepted (development mode).</p>
+                <p className="text-xs text-blue-600">Authentication is enforced when <code className="bg-blue-100 px-1 py-0.5 rounded">SALESFORCE_WEBHOOK_TOKEN</code> is set and Development Mode is off. To bypass authentication during testing, enable <strong>Development Mode</strong> in <strong>Settings → Webhooks</strong>.</p>
               </div>
             </div>
           )}

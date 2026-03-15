@@ -161,6 +161,27 @@ def _restore_toolset_state_from_dynamodb(config) -> None:
         logging.warning("Failed to restore toolset states from DynamoDB", exc_info=True)
 
 
+# In-memory flag for webhook development mode (auth bypass).
+# Default is False — authentication is enforced. Persisted to DynamoDB.
+_webhook_dev_mode: bool = False
+
+
+def _restore_app_settings_from_dynamodb() -> None:
+    """Load persisted app settings (e.g. webhook_dev_mode) from DynamoDB into memory."""
+    global _webhook_dev_mode
+    table_name = os.environ.get("HOLMES_DYNAMODB_TABLE", "")
+    if not table_name:
+        return
+    try:
+        from projects import get_app_settings_store  # noqa: PLC0415
+
+        store = get_app_settings_store()
+        _webhook_dev_mode = bool(store.get("webhook_dev_mode", False))
+        logging.info("Restored app settings from DynamoDB: webhook_dev_mode=%s", _webhook_dev_mode)
+    except Exception:
+        logging.warning("Failed to restore app settings from DynamoDB", exc_info=True)
+
+
 # ── Tool-count cap for Anthropic API ──────────────────────────────────────────
 # Anthropic's API has an internal limit on the number of tool definitions per
 # request (~256). With all integrations enabled (ADO=72, Atlassian=44,
@@ -279,6 +300,7 @@ def mount_frontend(app: FastAPI, config=None) -> None:
     # ── DynamoDB persistence: restore state on startup ────────────────────────
     _restore_llm_overrides_from_dynamodb(config)
     _restore_toolset_state_from_dynamodb(config)
+    _restore_app_settings_from_dynamodb()
 
     @app.get("/auth/check")
     async def auth_check(request: Request):
@@ -633,7 +655,8 @@ def mount_frontend(app: FastAPI, config=None) -> None:
                         "SALESFORCE_ACCESS_TOKEN": bool(os.environ.get("SALESFORCE_ACCESS_TOKEN")),
                     },
                 },
-            ]
+            ],
+            "webhook_dev_mode": _webhook_dev_mode,
         })
 
     @app.put("/api/webhooks/{webhook_id}/settings")
@@ -650,6 +673,24 @@ def mount_frontend(app: FastAPI, config=None) -> None:
             "Webhook settings updated: %s write_back_enabled=%s", webhook_id, write_back_enabled
         )
         return JSONResponse({"ok": True, "webhook_id": webhook_id, "write_back_enabled": write_back_enabled})
+
+    @app.get("/api/app-settings")
+    async def get_app_settings():
+        """Return global application settings."""
+        return JSONResponse({"webhook_dev_mode": _webhook_dev_mode})
+
+    @app.put("/api/app-settings")
+    async def update_app_settings(request: Request):
+        """Update global application settings and persist to DynamoDB."""
+        global _webhook_dev_mode
+        body = await request.json()
+        if "webhook_dev_mode" in body:
+            from projects import get_app_settings_store  # noqa: PLC0415
+            new_value = bool(body["webhook_dev_mode"])
+            get_app_settings_store().set("webhook_dev_mode", new_value)
+            _webhook_dev_mode = new_value
+            logging.info("App settings updated: webhook_dev_mode=%s", new_value)
+        return JSONResponse({"webhook_dev_mode": _webhook_dev_mode})
 
     # ── LLM Instructions helpers ──────────────────────────────────────────────
 
@@ -1268,7 +1309,7 @@ def mount_frontend(app: FastAPI, config=None) -> None:
 
         # ── 2. Verify HMAC-SHA256 signature ──────────────────────────────────
         webhook_secret = os.environ.get("PAGERDUTY_WEBHOOK_SECRET", "")
-        if webhook_secret:
+        if webhook_secret and not _webhook_dev_mode:
             sig_header = request.headers.get("x-pagerduty-signature", "")
             # PD sends "v1=<hex>,v1=<hex>" (may have multiple signatures)
             expected_sig = _hmac.new(
@@ -1486,7 +1527,7 @@ def mount_frontend(app: FastAPI, config=None) -> None:
         # ── 1. Basic-auth verification ────────────────────────────────────────
         ado_username = os.environ.get("ADO_WEBHOOK_USERNAME", "")
         ado_password = os.environ.get("ADO_WEBHOOK_PASSWORD", "")
-        if ado_username or ado_password:
+        if (ado_username or ado_password) and not _webhook_dev_mode:
             auth_header = request.headers.get("authorization", "")
             if auth_header.startswith("Basic "):
                 try:
@@ -1706,7 +1747,7 @@ def mount_frontend(app: FastAPI, config=None) -> None:
 
         # ── 1. Token verification ─────────────────────────────────────────────
         sf_token = os.environ.get("SALESFORCE_WEBHOOK_TOKEN", "")
-        if sf_token:
+        if sf_token and not _webhook_dev_mode:
             provided = request.headers.get("x-salesforce-token", "")
             if not provided or not hmac.compare_digest(provided, sf_token):
                 logging.warning("Salesforce webhook: invalid token")

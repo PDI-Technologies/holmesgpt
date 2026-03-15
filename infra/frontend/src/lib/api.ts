@@ -126,6 +126,11 @@ export interface WebhookInfo {
 
 export interface WebhooksResponse {
   webhooks: WebhookInfo[];
+  webhook_dev_mode: boolean;
+}
+
+export interface AppSettings {
+  webhook_dev_mode: boolean;
 }
 
 export interface LlmInstructionsEntry {
@@ -356,6 +361,17 @@ export const api = {
     return request(`/api/webhooks/${webhookId}/settings`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(settings),
+    });
+  },
+
+  getAppSettings(): Promise<AppSettings> {
+    return request('/api/app-settings');
+  },
+
+  updateAppSettings(settings: Partial<AppSettings>): Promise<AppSettings> {
+    return request('/api/app-settings', {
+      method: 'PUT',
       body: JSON.stringify(settings),
     });
   },

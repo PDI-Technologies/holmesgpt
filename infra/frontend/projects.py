@@ -362,6 +362,42 @@ def get_webhook_settings_store() -> WebhookSettingsStore:
     return _webhook_settings_store
 
 
+# ── App settings store ─────────────────────────────────────────────────────────
+
+
+class AppSettingsStore:
+    """Persist global application settings (e.g. webhook_dev_mode) across pod restarts."""
+
+    _PK = "APP_SETTINGS"
+
+    def get(self, key: str, default=None):
+        """Return the stored value for *key*, or *default* if not found."""
+        table_name = os.environ.get("HOLMES_DYNAMODB_TABLE", "")
+        if not table_name:
+            return default
+        try:
+            resp = _get_table().get_item(Key={"pk": self._PK, "sk": key})
+            item = resp.get("Item")
+            if item is None:
+                return default
+            return item.get("value", default)
+        except Exception:
+            return default
+
+    def set(self, key: str, value) -> None:
+        """Persist *value* for *key*."""
+        _get_table().put_item(
+            Item={"pk": self._PK, "sk": key, "value": value}
+        )
+
+
+_app_settings_store = AppSettingsStore()
+
+
+def get_app_settings_store() -> AppSettingsStore:
+    return _app_settings_store
+
+
 # ── Investigation history store ────────────────────────────────────────────────
 
 
