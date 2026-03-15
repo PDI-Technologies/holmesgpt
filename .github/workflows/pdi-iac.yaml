@@ -219,6 +219,9 @@ jobs:
 
       - name: Update kubeconfig for EKS
         if: env.HAVE_CREDS == 'true'
+        # Non-fatal: cluster may not exist yet on first plan (bootstrap scenario).
+        # The helm/kubernetes providers only need kubeconfig for apply, not plan.
+        continue-on-error: true
         run: |
           CLUSTER_NAME="holmesgpt-${{ matrix.env }}"
           aws eks update-kubeconfig \

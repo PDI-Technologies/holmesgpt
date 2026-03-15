@@ -99,6 +99,7 @@ variable "anthropic_api_key" {
   description = "Anthropic API key (stored in Secrets Manager)"
   type        = string
   sensitive   = true
+  default     = ""
 }
 
 variable "holmes_model" {
@@ -131,6 +132,7 @@ variable "holmes_ui_password" {
   description = "Password for Holmes UI login"
   type        = string
   sensitive   = true
+  default     = ""
 }
 
 # MCP Integration API Keys
