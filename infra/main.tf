@@ -55,11 +55,16 @@ provider "helm" {
     exec {
       api_version = "client.authentication.k8s.io/v1beta1"
       command     = "aws"
+      # Always pass --region explicitly so `aws eks get-token` works in CI
+      # (env-var credentials have no profile config to derive the region from).
       # When aws_profile is empty (CI uses env-var credentials), omit --profile flag.
       args = var.aws_profile != "" ? [
-        "eks", "get-token", "--cluster-name", module.eks.cluster_name, "--profile", var.aws_profile
+        "eks", "get-token", "--cluster-name", module.eks.cluster_name,
+        "--region", var.aws_region,
+        "--profile", var.aws_profile
       ] : [
-        "eks", "get-token", "--cluster-name", module.eks.cluster_name
+        "eks", "get-token", "--cluster-name", module.eks.cluster_name,
+        "--region", var.aws_region
       ]
     }
   }
@@ -72,11 +77,16 @@ provider "kubernetes" {
   exec {
     api_version = "client.authentication.k8s.io/v1beta1"
     command     = "aws"
+    # Always pass --region explicitly so `aws eks get-token` works in CI
+    # (env-var credentials have no profile config to derive the region from).
     # When aws_profile is empty (CI uses env-var credentials), omit --profile flag.
     args = var.aws_profile != "" ? [
-      "eks", "get-token", "--cluster-name", module.eks.cluster_name, "--profile", var.aws_profile
+      "eks", "get-token", "--cluster-name", module.eks.cluster_name,
+      "--region", var.aws_region,
+      "--profile", var.aws_profile
     ] : [
-      "eks", "get-token", "--cluster-name", module.eks.cluster_name
+      "eks", "get-token", "--cluster-name", module.eks.cluster_name,
+      "--region", var.aws_region
     ]
   }
 }
