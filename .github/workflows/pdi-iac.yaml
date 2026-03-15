@@ -5,7 +5,9 @@
 #   prod — pdi-platform-production                    — deploys on push to release/** or workflow_dispatch
 #
 # On pull_request (infra/** changes):
-#   - Runs `tofu plan` for BOTH environments and posts the plan diff as a PR comment
+#   - Runs `tofu plan -refresh=false` for BOTH environments and posts the plan diff as a PR comment
+#   - -refresh=false skips live state refresh so the plan works from GitHub Actions even when
+#     the EKS API endpoint is private and unreachable from the runner
 #
 # On push to master (infra/** changes):
 #   - Runs `tofu apply` for dev only
@@ -259,6 +261,7 @@ jobs:
             -var="mcp_ado_api_key=${{ env.MCP_ADO_API_KEY }}" \
             -var="mcp_atlassian_api_key=${{ env.MCP_ATLASSIAN_API_KEY }}" \
             -var="mcp_salesforce_api_key=${{ env.MCP_SALESFORCE_API_KEY }}" \
+            -refresh=false \
             -out=tfplan \
             -no-color \
             2>&1 | tee /tmp/plan_output.txt
