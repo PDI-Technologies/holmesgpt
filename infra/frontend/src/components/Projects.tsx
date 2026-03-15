@@ -302,7 +302,7 @@ export default function Projects({ projects: projectsProp, onReload }: ProjectsP
     try {
       await api.deleteProject(id)
       onReload()
-    } catch (e) {
+    } catch {
       // silently ignore — project may already be gone
     } finally {
       setDeleting(null)

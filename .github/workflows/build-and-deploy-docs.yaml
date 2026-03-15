@@ -1,10 +1,8 @@
 name: Build and Deploy HolmesGPT Documentation
+# PDI fork: disabled — upstream workflow would push docs to GitHub Pages.
+# This is a private fork; docs are not published externally.
 on:
-  push:
-    branches:
-      - master
-    tags:
-      - '[0-9]*.[0-9]*.[0-9]*'
+  workflow_dispatch: {}
 permissions:
   contents: write
 jobs:

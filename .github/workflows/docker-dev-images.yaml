@@ -1,12 +1,9 @@
 name: Docker Build on PR
 
+# PDI fork: this upstream workflow requires GCP credentials that only exist in
+# the upstream HolmesGPT repo. Disabled here — PDI uses pdi-build.yaml instead.
 on:
-  pull_request:
-    types: [opened, synchronize, reopened]
-    paths-ignore:
-      - 'docs/**'
-      - '**/*.md'
-      - 'mkdocs.yml'
+  workflow_dispatch: {}
 
 # Cancel in-progress runs for the same PR
 concurrency:

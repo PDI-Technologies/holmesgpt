@@ -2,14 +2,16 @@
 
 import json
 import logging
-from typing import Any, ClassVar, Optional, Tuple, Type
+from typing import Any, Optional, Tuple, Type
 
 import requests
 from pydantic import Field
 
 from holmes.core.tools import (
     CallablePrerequisite,
-    ClassVar as ToolsClassVar,
+)
+from holmes.core.tools import ClassVar as ToolsClassVar
+from holmes.core.tools import (
     StructuredToolResult,
     StructuredToolResultStatus,
     Tool,
@@ -83,7 +85,10 @@ class OutlookToolset(Toolset):
 
     def prerequisites_callable(self, config: dict[str, Any]) -> Tuple[bool, str]:
         if not config:
-            return False, "Missing Outlook configuration. Provide tenant_id, client_id, client_secret, and mailbox."
+            return (
+                False,
+                "Missing Outlook configuration. Provide tenant_id, client_id, client_secret, and mailbox.",
+            )
         try:
             self.outlook_config = OutlookConfig(**config)
             return self._health_check()
@@ -121,9 +126,15 @@ class OutlookToolset(Toolset):
             if resp.status_code == 200:
                 return True, ""
             if resp.status_code == 403:
-                return False, "Outlook API returned 403 Forbidden. Ensure the app has Mail.Read application permission in Azure AD."
+                return (
+                    False,
+                    "Outlook API returned 403 Forbidden. Ensure the app has Mail.Read application permission in Azure AD.",
+                )
             if resp.status_code == 404:
-                return False, f"Mailbox '{self.outlook_config.mailbox}' not found. Verify the email address is correct."
+                return (
+                    False,
+                    f"Mailbox '{self.outlook_config.mailbox}' not found. Verify the email address is correct.",
+                )
             return False, f"Outlook API returned {resp.status_code}: {resp.text[:200]}"
         except Exception as e:
             return False, f"Outlook health check failed: {e}"
@@ -139,11 +150,15 @@ class OutlookToolset(Toolset):
     def get(self, path: str, params: Optional[dict] = None) -> dict:
         assert self.outlook_config is not None
         url = f"{GRAPH_API_BASE}{path}"
-        resp = requests.get(url, headers=self._headers(), params=params or {}, timeout=30)
+        resp = requests.get(
+            url, headers=self._headers(), params=params or {}, timeout=30
+        )
         if resp.status_code == 401:
             # Token may have expired, refresh and retry
             self._access_token = self._get_access_token()
-            resp = requests.get(url, headers=self._headers(), params=params or {}, timeout=30)
+            resp = requests.get(
+                url, headers=self._headers(), params=params or {}, timeout=30
+            )
         resp.raise_for_status()
         return resp.json()
 
@@ -166,7 +181,11 @@ class ListOutlookMailFolders(BaseOutlookTool):
 
     def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:
         if not self.toolset.outlook_config:
-            return StructuredToolResult(status=StructuredToolResultStatus.ERROR, error="Outlook not configured", params=params)
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR,
+                error="Outlook not configured",
+                params=params,
+            )
         try:
             mailbox = self.toolset.outlook_config.mailbox
             data = self.toolset.get(f"/users/{mailbox}/mailFolders")
@@ -178,7 +197,9 @@ class ListOutlookMailFolders(BaseOutlookTool):
             )
         except Exception as e:
             logging.exception("Failed to list Outlook mail folders")
-            return StructuredToolResult(status=StructuredToolResultStatus.ERROR, error=str(e), params=params)
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR, error=str(e), params=params
+            )
 
 
 class ListOutlookEmails(BaseOutlookTool):
@@ -212,7 +233,11 @@ class ListOutlookEmails(BaseOutlookTool):
 
     def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:
         if not self.toolset.outlook_config:
-            return StructuredToolResult(status=StructuredToolResultStatus.ERROR, error="Outlook not configured", params=params)
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR,
+                error="Outlook not configured",
+                params=params,
+            )
         try:
             mailbox = self.toolset.outlook_config.mailbox
             folder = params.get("folder") or self.toolset.outlook_config.default_folder
@@ -224,7 +249,9 @@ class ListOutlookEmails(BaseOutlookTool):
             }
             if params.get("unread_only"):
                 query_params["$filter"] = "isRead eq false"
-            data = self.toolset.get(f"/users/{mailbox}/mailFolders/{folder}/messages", params=query_params)
+            data = self.toolset.get(
+                f"/users/{mailbox}/mailFolders/{folder}/messages", params=query_params
+            )
             return StructuredToolResult(
                 status=StructuredToolResultStatus.SUCCESS,
                 data=json.dumps(data, indent=2),
@@ -233,7 +260,9 @@ class ListOutlookEmails(BaseOutlookTool):
             )
         except Exception as e:
             logging.exception("Failed to list Outlook emails")
-            return StructuredToolResult(status=StructuredToolResultStatus.ERROR, error=str(e), params=params)
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR, error=str(e), params=params
+            )
 
 
 class GetOutlookEmail(BaseOutlookTool):
@@ -256,15 +285,25 @@ class GetOutlookEmail(BaseOutlookTool):
 
     def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:
         if not self.toolset.outlook_config:
-            return StructuredToolResult(status=StructuredToolResultStatus.ERROR, error="Outlook not configured", params=params)
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR,
+                error="Outlook not configured",
+                params=params,
+            )
         message_id = params.get("message_id", "")
         if not message_id:
-            return StructuredToolResult(status=StructuredToolResultStatus.ERROR, error="message_id is required", params=params)
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR,
+                error="message_id is required",
+                params=params,
+            )
         try:
             mailbox = self.toolset.outlook_config.mailbox
             data = self.toolset.get(
                 f"/users/{mailbox}/messages/{message_id}",
-                params={"$select": "id,subject,from,toRecipients,ccRecipients,receivedDateTime,isRead,body,hasAttachments,importance,attachments"},
+                params={
+                    "$select": "id,subject,from,toRecipients,ccRecipients,receivedDateTime,isRead,body,hasAttachments,importance,attachments"
+                },
             )
             return StructuredToolResult(
                 status=StructuredToolResultStatus.SUCCESS,
@@ -273,11 +312,19 @@ class GetOutlookEmail(BaseOutlookTool):
             )
         except requests.HTTPError as e:
             if e.response is not None and e.response.status_code == 404:
-                return StructuredToolResult(status=StructuredToolResultStatus.ERROR, error=f"Email {message_id} not found", params=params)
-            return StructuredToolResult(status=StructuredToolResultStatus.ERROR, error=str(e), params=params)
+                return StructuredToolResult(
+                    status=StructuredToolResultStatus.ERROR,
+                    error=f"Email {message_id} not found",
+                    params=params,
+                )
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR, error=str(e), params=params
+            )
         except Exception as e:
             logging.exception("Failed to get Outlook email")
-            return StructuredToolResult(status=StructuredToolResultStatus.ERROR, error=str(e), params=params)
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR, error=str(e), params=params
+            )
 
 
 class SearchOutlookEmails(BaseOutlookTool):
@@ -311,10 +358,18 @@ class SearchOutlookEmails(BaseOutlookTool):
 
     def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:
         if not self.toolset.outlook_config:
-            return StructuredToolResult(status=StructuredToolResultStatus.ERROR, error="Outlook not configured", params=params)
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR,
+                error="Outlook not configured",
+                params=params,
+            )
         query = params.get("query", "")
         if not query:
-            return StructuredToolResult(status=StructuredToolResultStatus.ERROR, error="query is required", params=params)
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR,
+                error="query is required",
+                params=params,
+            )
         try:
             mailbox = self.toolset.outlook_config.mailbox
             folder = params.get("folder") or self.toolset.outlook_config.default_folder
@@ -324,7 +379,9 @@ class SearchOutlookEmails(BaseOutlookTool):
                 "$search": f'"{query}"',
                 "$select": "id,subject,from,receivedDateTime,isRead,bodyPreview,hasAttachments,importance",
             }
-            data = self.toolset.get(f"/users/{mailbox}/mailFolders/{folder}/messages", params=query_params)
+            data = self.toolset.get(
+                f"/users/{mailbox}/mailFolders/{folder}/messages", params=query_params
+            )
             return StructuredToolResult(
                 status=StructuredToolResultStatus.SUCCESS,
                 data=json.dumps(data, indent=2),
@@ -332,7 +389,9 @@ class SearchOutlookEmails(BaseOutlookTool):
             )
         except Exception as e:
             logging.exception("Failed to search Outlook emails")
-            return StructuredToolResult(status=StructuredToolResultStatus.ERROR, error=str(e), params=params)
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR, error=str(e), params=params
+            )
 
 
 class ListOutlookCalendarEvents(BaseOutlookTool):
@@ -365,7 +424,11 @@ class ListOutlookCalendarEvents(BaseOutlookTool):
 
     def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:
         if not self.toolset.outlook_config:
-            return StructuredToolResult(status=StructuredToolResultStatus.ERROR, error="Outlook not configured", params=params)
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR,
+                error="Outlook not configured",
+                params=params,
+            )
         try:
             import datetime
 
@@ -374,7 +437,9 @@ class ListOutlookCalendarEvents(BaseOutlookTool):
 
             now = datetime.datetime.utcnow()
             start = params.get("start_datetime") or now.strftime("%Y-%m-%dT%H:%M:%SZ")
-            end = params.get("end_datetime") or (now + datetime.timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%SZ")
+            end = params.get("end_datetime") or (
+                now + datetime.timedelta(days=7)
+            ).strftime("%Y-%m-%dT%H:%M:%SZ")
 
             query_params: dict[str, Any] = {
                 "$top": limit,
@@ -383,7 +448,9 @@ class ListOutlookCalendarEvents(BaseOutlookTool):
                 "startDateTime": start,
                 "endDateTime": end,
             }
-            data = self.toolset.get(f"/users/{mailbox}/calendarView", params=query_params)
+            data = self.toolset.get(
+                f"/users/{mailbox}/calendarView", params=query_params
+            )
             return StructuredToolResult(
                 status=StructuredToolResultStatus.SUCCESS,
                 data=json.dumps(data, indent=2),
@@ -392,4 +459,6 @@ class ListOutlookCalendarEvents(BaseOutlookTool):
             )
         except Exception as e:
             logging.exception("Failed to list Outlook calendar events")
-            return StructuredToolResult(status=StructuredToolResultStatus.ERROR, error=str(e), params=params)
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR, error=str(e), params=params
+            )

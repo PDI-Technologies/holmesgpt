@@ -73,10 +73,10 @@ DELETE /api/projects/{id}         → delete project
 
 ```bash
 cat > /tmp/login.json << 'EOF'
-{"username":"admin","password":"HolmesGPT@Dev2026!"}
+{"username":"admin","password":"<HOLMESGPT_ADMIN_PASSWORD>"}
 EOF
 curl -s -c /tmp/cookies.txt -X POST \
-  https://holmesgpt.dev.platform.pditechnologies.com/auth/login \
+  https://<HOLMESGPT_APP_URL>/auth/login \
   -H "Content-Type: application/json" -d @/tmp/login.json
 
 cat > /tmp/new-project.json << 'EOF'
@@ -87,7 +87,7 @@ cat > /tmp/new-project.json << 'EOF'
     {
       "type": "grafana/dashboards",
       "name": "grafana-logistics",
-      "secret_arn": "arn:aws:secretsmanager:us-east-1:717423812395:secret:holmesgpt-dev/project-grafana-logistics"
+      "secret_arn": "arn:aws:secretsmanager:us-east-1:<AWS_ACCOUNT_ID>:secret:holmesgpt-dev/project-grafana-logistics"
     },
     {
       "type": "aws_api",
@@ -98,14 +98,14 @@ cat > /tmp/new-project.json << 'EOF'
     {
       "type": "ado",
       "name": "ado",
-      "secret_arn": "arn:aws:secretsmanager:us-east-1:717423812395:secret:holmesgpt-dev/project-ado-logistics"
+      "secret_arn": "arn:aws:secretsmanager:us-east-1:<AWS_ACCOUNT_ID>:secret:holmesgpt-dev/project-ado-logistics"
     }
   ]
 }
 EOF
 
 curl -s -b /tmp/cookies.txt \
-  -X POST https://holmesgpt.dev.platform.pditechnologies.com/api/projects \
+  -X POST https://<HOLMESGPT_APP_URL>/api/projects \
   -H "Content-Type: application/json" \
   -d @/tmp/new-project.json | python3 -m json.tool
 ```
@@ -154,7 +154,7 @@ Examples:
 aws secretsmanager create-secret \
   --name "holmesgpt-dev/project-grafana-logistics" \
   --secret-string '{"api_url":"https://grafana-logistics.pdisoftware.com","api_key":"glsa_xxxx"}' \
-  --profile pdi-platform-dev \
+  --profile <AWS_PROFILE> \
   --region us-east-1
 ```
 

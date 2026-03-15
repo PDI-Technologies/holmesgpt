@@ -76,12 +76,12 @@ Claude Code configuration for the **PDI HolmesGPT** repository. Contains skills,
 ## Environment
 
 ```
-App URL:      https://holmesgpt.dev.platform.pditechnologies.com
-Auth:         admin / HolmesGPT@Dev2026!
-ECR:          717423812395.dkr.ecr.us-east-1.amazonaws.com/holmesgpt
+App URL:      https://<HOLMESGPT_APP_URL>
+Auth:         admin / <HOLMESGPT_ADMIN_PASSWORD>
+ECR:          <AWS_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/holmesgpt
 EKS:          holmesgpt-dev  (us-east-1, namespace: holmesgpt)
 DynamoDB:     holmesgpt-dev-config
-AWS Profile:  pdi-platform-dev
+AWS Profile:  <AWS_PROFILE>
 Tofu:         ~/.local/bin/tofu  (NOT terraform)
 ```
 

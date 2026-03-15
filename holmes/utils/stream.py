@@ -60,7 +60,9 @@ def _is_rate_limit_error(e: Exception) -> bool:
     instead of litellm.exceptions.RateLimitError, so we need a string check
     as a fallback.
     """
-    return isinstance(e, litellm.exceptions.RateLimitError) or "Model is getting throttled" in str(e)
+    return isinstance(
+        e, litellm.exceptions.RateLimitError
+    ) or "Model is getting throttled" in str(e)
 
 
 def stream_chat_formatter(

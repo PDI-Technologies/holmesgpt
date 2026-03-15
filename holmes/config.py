@@ -139,8 +139,6 @@ class Config(RobustaBaseConfig):
             self._llm_model_registry = LLMModelRegistry(self, dal=self.dal)
         return self._llm_model_registry
 
-
-
     def log_useful_info(self):
         if self.llm_model_registry.models:
             logging.info(

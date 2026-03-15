@@ -1,14 +1,9 @@
 name: Scorecard analysis workflow
+# PDI fork: disabled — upstream workflow publishes OSSF Scorecard results
+# publicly to the OpenSSF API. PDI is a private fork; results should not be
+# published externally.
 on:
-  push:
-    # Only the default branch is supported.
-    branches:
-    - master
-  schedule:
-    # Weekly on Saturdays.
-    # - cron:  '30 1 * * 6'
-    # Daily
-    - cron: '30 1 * * *'
+  workflow_dispatch: {}
 
 permissions: read-all
 

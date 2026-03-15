@@ -53,11 +53,13 @@ def reset_singleton():
 def env_without_token():
     """Provide an environment with AUTO_GENERATED_GITHUB_TOKEN removed but GitHub App env vars present."""
     env = {k: v for k, v in os.environ.items() if k != "AUTO_GENERATED_GITHUB_TOKEN"}
-    env.update({
-        "GITHUB_APP_ID": "12345",
-        "GITHUB_APP_INSTALLATION_ID": "67890",
-        "GITHUB_APP_PRIVATE_KEY": "dummy-key",
-    })
+    env.update(
+        {
+            "GITHUB_APP_ID": "12345",
+            "GITHUB_APP_INSTALLATION_ID": "67890",
+            "GITHUB_APP_PRIVATE_KEY": "dummy-key",
+        }
+    )
     with patch.dict(os.environ, env, clear=True):
         yield
 
@@ -76,7 +78,10 @@ class TestGitHubAppTokenManager:
     def test_refresh_token(self, mock_post, token_manager):
         mock_post.return_value = MagicMock(
             status_code=200,
-            json=lambda: {"token": "ghs_testtoken123", "expires_at": "2099-01-01T00:00:00Z"},
+            json=lambda: {
+                "token": "ghs_testtoken123",
+                "expires_at": "2099-01-01T00:00:00Z",
+            },
         )
 
         token = token_manager.refresh_token()
@@ -148,7 +153,9 @@ class TestEnsureGitHubAppTokenEnv:
         assert "AUTO_GENERATED_GITHUB_TOKEN" not in os.environ
 
     @patch("holmes.utils.github_app_token_manager.GitHubAppTokenManager.get_instance")
-    def test_noop_when_no_github_app_configured(self, mock_get_instance, env_without_token):
+    def test_noop_when_no_github_app_configured(
+        self, mock_get_instance, env_without_token
+    ):
         mock_get_instance.return_value = None
 
         ensure_github_app_token_env()
@@ -157,7 +164,9 @@ class TestEnsureGitHubAppTokenEnv:
 
 class TestBackgroundRefresh:
     @patch("holmes.utils.github_app_token_manager.GitHubAppTokenManager.get_instance")
-    def test_ensure_starts_background_thread(self, mock_get_instance, env_without_token):
+    def test_ensure_starts_background_thread(
+        self, mock_get_instance, env_without_token
+    ):
         """ensure_github_app_token_env should start the background refresh thread."""
         mock_manager = MagicMock()
         mock_manager.refresh_token.return_value = "ghs_generated"

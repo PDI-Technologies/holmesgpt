@@ -9,6 +9,7 @@ Table schema (single-table design):
   TOOLSET_STATE         | <toolset_name>  | enabled bool
   INVESTIGATION#<id>    | META            | JSON-serialised Investigation
 """
+
 from __future__ import annotations
 
 import json
@@ -54,7 +55,9 @@ class Instance(BaseModel):
     id: str = Field(default_factory=lambda: uuid.uuid4().hex)
     type: str  # base toolset type: "grafana/dashboards", "aws_api", "salesforce", "ado", "atlassian"
     name: str  # unique instance name: "grafana-logistics", "aws_api"
-    tags: dict[str, str] = {}  # free-form key-value tags; empty = global (always included)
+    tags: dict[
+        str, str
+    ] = {}  # free-form key-value tags; empty = global (always included)
     secret_arn: Optional[str] = None
     mcp_url: Optional[str] = None
     aws_accounts: Optional[list[str]] = None
@@ -136,7 +139,11 @@ class InstancesStore:
             created_at=datetime.now(timezone.utc).isoformat(),
         )
         _get_table().put_item(
-            Item={"pk": f"INSTANCE#{inst.id}", "sk": "META", "data": inst.model_dump_json()}
+            Item={
+                "pk": f"INSTANCE#{inst.id}",
+                "sk": "META",
+                "data": inst.model_dump_json(),
+            }
         )
         return inst
 
@@ -147,7 +154,11 @@ class InstancesStore:
         for k, v in kwargs.items():
             setattr(inst, k, v)
         _get_table().put_item(
-            Item={"pk": f"INSTANCE#{inst.id}", "sk": "META", "data": inst.model_dump_json()}
+            Item={
+                "pk": f"INSTANCE#{inst.id}",
+                "sk": "META",
+                "data": inst.model_dump_json(),
+            }
         )
         return inst
 
@@ -159,7 +170,9 @@ class InstancesStore:
         return bool(resp.get("Attributes"))
 
     def get(self, instance_id: str) -> Optional[Instance]:
-        resp = _get_table().get_item(Key={"pk": f"INSTANCE#{instance_id}", "sk": "META"})
+        resp = _get_table().get_item(
+            Key={"pk": f"INSTANCE#{instance_id}", "sk": "META"}
+        )
         item = resp.get("Item")
         if not item:
             return None
@@ -167,6 +180,7 @@ class InstancesStore:
 
     def list(self) -> list[Instance]:
         from boto3.dynamodb.conditions import Attr  # noqa: PLC0415
+
         table = _get_table()
         filter_expr = Attr("pk").begins_with("INSTANCE#") & Attr("sk").eq("META")
         items: list = []
@@ -240,6 +254,7 @@ class ProjectsStore:
     def list(self) -> list[Project]:
         # Scan for all PROJECT# items with pagination support
         from boto3.dynamodb.conditions import Attr  # noqa: PLC0415
+
         table = _get_table()
         filter_expr = Attr("pk").begins_with("PROJECT#") & Attr("sk").eq("META")
         items: list = []
@@ -275,7 +290,11 @@ class LLMInstructionsStore:
 
     def save(self, toolset_name: str, instructions: str) -> None:
         _get_table().put_item(
-            Item={"pk": "LLM_OVERRIDE", "sk": toolset_name, "instructions": instructions}
+            Item={
+                "pk": "LLM_OVERRIDE",
+                "sk": toolset_name,
+                "instructions": instructions,
+            }
         )
 
     def delete(self, toolset_name: str) -> None:
@@ -386,9 +405,7 @@ class AppSettingsStore:
 
     def set(self, key: str, value) -> None:
         """Persist *value* for *key*."""
-        _get_table().put_item(
-            Item={"pk": self._PK, "sk": key, "value": value}
-        )
+        _get_table().put_item(Item={"pk": self._PK, "sk": key, "value": value})
 
 
 _app_settings_store = AppSettingsStore()
@@ -478,6 +495,7 @@ class InvestigationStore:
         investigations) a scan is acceptable; add a GSI on started_at if needed later.
         """
         from boto3.dynamodb.conditions import Attr  # noqa: PLC0415
+
         filter_expr = Attr("pk").begins_with("INVESTIGATION#") & Attr("sk").eq("META")
         if source:
             filter_expr = filter_expr & Attr("source").eq(source)
@@ -494,8 +512,7 @@ class InvestigationStore:
             kwargs["ExclusiveStartKey"] = last_key
 
         investigations = [
-            Investigation.model_validate_json(item["data"])
-            for item in items
+            Investigation.model_validate_json(item["data"]) for item in items
         ]
 
         # Filter by project_id in Python (avoids another DynamoDB attribute)
@@ -702,9 +719,13 @@ def build_project_tool_executor(
             # ── AWS toolset with account filter ───────────────────────────────
             if instance.type == "aws_api":
                 if instance.aws_accounts:
-                    global_ts = global_by_name.get(instance.name) or global_by_name.get("aws_api")
+                    global_ts = global_by_name.get(instance.name) or global_by_name.get(
+                        "aws_api"
+                    )
                     if global_ts is not None:
-                        ts = _build_aws_toolset_with_account_filter(global_ts, instance.aws_accounts)
+                        ts = _build_aws_toolset_with_account_filter(
+                            global_ts, instance.aws_accounts
+                        )
                         project_toolsets.append(ts)
                     else:
                         logging.warning(
@@ -714,7 +735,9 @@ def build_project_tool_executor(
                         )
                 else:
                     # No account filter — reuse global aws_api toolset as-is
-                    global_ts = global_by_name.get(instance.name) or global_by_name.get("aws_api")
+                    global_ts = global_by_name.get(instance.name) or global_by_name.get(
+                        "aws_api"
+                    )
                     if global_ts is not None:
                         project_toolsets.append(global_ts)
                     else:
@@ -737,9 +760,13 @@ def build_project_tool_executor(
             # ── Dynamically instantiate Python toolset with Secrets Manager creds ──
             creds = _fetch_secret(instance.secret_arn) if instance.secret_arn else {}
             synthetic_config = {instance.name: {"enabled": True, "config": creds}}
-            from holmes.plugins.toolsets import load_toolsets_from_config  # type: ignore
+            from holmes.plugins.toolsets import (
+                load_toolsets_from_config,  # type: ignore
+            )
 
-            new_toolsets = load_toolsets_from_config(synthetic_config, strict_check=False)
+            new_toolsets = load_toolsets_from_config(
+                synthetic_config, strict_check=False
+            )
             if new_toolsets:
                 ts = new_toolsets[0]
                 ts.check_prerequisites()

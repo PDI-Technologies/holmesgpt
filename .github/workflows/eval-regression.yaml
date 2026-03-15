@@ -1,13 +1,8 @@
 name: Run eval regression tests
-
+# PDI fork: pull_request trigger disabled — upstream workflow posts LLM eval
+# results to Braintrust using upstream API keys and posts PR comments to the
+# upstream repo. PDI runs evals manually via workflow_dispatch only.
 on:
-  pull_request:
-    branches: ["*"]
-    types: [opened, synchronize, reopened, labeled]
-    paths-ignore:
-      - 'docs/**'
-      - '**/*.md'
-      - 'mkdocs.yml'
   workflow_dispatch:
     inputs:
       pr_number:

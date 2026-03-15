@@ -36,7 +36,9 @@ def _format_diff_pct(diff: Optional[float]) -> str:
     return f"**{indicator}**" if bold else indicator
 
 
-def _calc_diff_pct(current: Optional[float], baseline: Optional[float]) -> Optional[float]:
+def _calc_diff_pct(
+    current: Optional[float], baseline: Optional[float]
+) -> Optional[float]:
     """Calculate percentage difference: positive = current is higher."""
     if not current or not baseline or baseline == 0:
         return None
@@ -60,20 +62,22 @@ def _generate_comparison_tables(
         test_name = result.get("test_case_name", "")
         model = result.get("model", "")
         key = f"{test_name}:{model}"
-        comparison = comparison_map.get(key)
+        comparison = comparison_map.get(key)  # noqa: F841
         baseline = benchmark.get(key)
 
-        rows.append({
-            "name": f"{test_name} ({model})" if model else test_name,
-            "current_time": result.get("holmes_duration"),
-            "baseline_time": baseline.duration if baseline else None,
-            "current_cost": result.get("cost"),
-            "baseline_cost": baseline.cost if baseline else None,
-            "current_total_tokens": result.get("total_tokens", 0) or 0,
-            "baseline_total_tokens": baseline.total_tokens if baseline else None,
-            "current_cached_tokens": result.get("cached_tokens"),
-            "baseline_cached_tokens": baseline.cached_tokens if baseline else None,
-        })
+        rows.append(
+            {
+                "name": f"{test_name} ({model})" if model else test_name,
+                "current_time": result.get("holmes_duration"),
+                "baseline_time": baseline.duration if baseline else None,
+                "current_cost": result.get("cost"),
+                "baseline_cost": baseline.cost if baseline else None,
+                "current_total_tokens": result.get("total_tokens", 0) or 0,
+                "baseline_total_tokens": baseline.total_tokens if baseline else None,
+                "current_cached_tokens": result.get("cached_tokens"),
+                "baseline_cached_tokens": baseline.cached_tokens if baseline else None,
+            }
+        )
 
     # --- Time comparison table ---
     has_time_data = any(r["baseline_time"] is not None for r in rows)
@@ -84,7 +88,9 @@ def _generate_comparison_tables(
         for r in rows:
             cur = f"{r['current_time']:.1f}s" if r["current_time"] else "—"
             base = f"{r['baseline_time']:.1f}s" if r["baseline_time"] else "—"
-            diff = _format_diff_pct(_calc_diff_pct(r["current_time"], r["baseline_time"]))
+            diff = _format_diff_pct(
+                _calc_diff_pct(r["current_time"], r["baseline_time"])
+            )
             lines.append(f"| {r['name']} | {cur} | {base} | {diff} |")
         lines.append("")
 
@@ -97,7 +103,9 @@ def _generate_comparison_tables(
         for r in rows:
             cur = f"${r['current_cost']:.4f}" if r["current_cost"] else "—"
             base = f"${r['baseline_cost']:.4f}" if r["baseline_cost"] else "—"
-            diff = _format_diff_pct(_calc_diff_pct(r["current_cost"], r["baseline_cost"]))
+            diff = _format_diff_pct(
+                _calc_diff_pct(r["current_cost"], r["baseline_cost"])
+            )
             lines.append(f"| {r['name']} | {cur} | {base} | {diff} |")
         lines.append("")
 
@@ -194,7 +202,9 @@ def _generate_historical_details_section(
 
     # Experiments used
     if details.experiments:
-        lines.append(f"\n**Benchmark experiment{'s' if len(details.experiments) > 1 else ''}:**\n")
+        lines.append(
+            f"\n**Benchmark experiment{'s' if len(details.experiments) > 1 else ''}:**\n"
+        )
         for exp in details.experiments:
             exp_url = f"https://www.braintrust.dev/app/{BRAINTRUST_ORG}/p/{BRAINTRUST_PROJECT}/experiments/{exp.id}"
             created_info = f" (created: {exp.created[:10]})" if exp.created else ""
@@ -331,7 +341,7 @@ def generate_markdown_report(
 
     for result in sorted_results:
         test_case_name = result["test_case_name"]
-        model = result.get("model", "")
+        model = result.get("model", "")  # noqa: F841
 
         braintrust_url = get_braintrust_url(
             result.get("braintrust_span_id"),
@@ -411,7 +421,9 @@ def generate_markdown_report(
         input_str = _fmt_tokens(prompt_tokens)
         output_str = _fmt_tokens(completion_tokens)
         cached_tokens_str = f"{cached_tokens:,}" if cached_tokens is not None else "—"
-        non_cached_tokens_str = f"{non_cached_tokens:,}" if non_cached_tokens is not None else "—"
+        non_cached_tokens_str = (
+            f"{non_cached_tokens:,}" if non_cached_tokens is not None else "—"
+        )
         reasoning_str = _fmt_tokens(reasoning_tokens)
         max_completion_str = _fmt_tokens(max_completion)
         compactions_str = str(num_compactions) if num_compactions > 0 else "—"

@@ -47,7 +47,11 @@ class GitHubAppTokenManager:
         """Check if all required GitHub App environment variables are set."""
         return all(
             os.environ.get(k)
-            for k in ("GITHUB_APP_ID", "GITHUB_APP_INSTALLATION_ID", "GITHUB_APP_PRIVATE_KEY")
+            for k in (
+                "GITHUB_APP_ID",
+                "GITHUB_APP_INSTALLATION_ID",
+                "GITHUB_APP_PRIVATE_KEY",
+            )
         )
 
     @classmethod

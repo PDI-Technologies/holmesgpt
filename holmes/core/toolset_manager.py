@@ -238,10 +238,14 @@ class ToolsetManager:
             # e.g. "grafana/dashboards:logistics" → new GrafanaToolset(name="grafana/dashboards:logistics")
             if ":" in toolset_name:
                 base_name, _suffix = toolset_name.split(":", 1)
-                from holmes.plugins.toolsets import PYTHON_TOOLSET_FACTORIES  # noqa: PLC0415
+                from holmes.plugins.toolsets import (  # noqa: PLC0415
+                    PYTHON_TOOLSET_FACTORIES,
+                )
 
                 if base_name in PYTHON_TOOLSET_FACTORIES:
-                    toolset_config = dict(toolset_config)  # shallow copy to avoid mutating caller's dict
+                    toolset_config = dict(
+                        toolset_config
+                    )  # shallow copy to avoid mutating caller's dict
                     toolset_config["_python_base"] = base_name
                     toolset_config["_instance_name"] = toolset_name
                     custom_toolsets_dict[toolset_name] = toolset_config

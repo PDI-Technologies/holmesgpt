@@ -2,14 +2,16 @@
 
 import json
 import logging
-from typing import Any, ClassVar, Optional, Tuple, Type
+from typing import Any, Optional, Tuple, Type
 
 import requests
 from pydantic import Field
 
 from holmes.core.tools import (
     CallablePrerequisite,
-    ClassVar as ToolsClassVar,
+)
+from holmes.core.tools import ClassVar as ToolsClassVar
+from holmes.core.tools import (
     StructuredToolResult,
     StructuredToolResultStatus,
     Tool,
@@ -83,7 +85,10 @@ class TeamsToolset(Toolset):
 
     def prerequisites_callable(self, config: dict[str, Any]) -> Tuple[bool, str]:
         if not config:
-            return False, "Missing Teams configuration. Provide tenant_id, client_id, and client_secret."
+            return (
+                False,
+                "Missing Teams configuration. Provide tenant_id, client_id, and client_secret.",
+            )
         try:
             self.teams_config = TeamsConfig(**config)
             return self._health_check()
@@ -121,7 +126,10 @@ class TeamsToolset(Toolset):
                 # 400 can happen if no teams are joined but auth is valid
                 return True, ""
             if resp.status_code == 403:
-                return False, "Teams API returned 403 Forbidden. Ensure the app has Team.ReadBasic.All and ChannelMessage.Read.All permissions."
+                return (
+                    False,
+                    "Teams API returned 403 Forbidden. Ensure the app has Team.ReadBasic.All and ChannelMessage.Read.All permissions.",
+                )
             return False, f"Teams API returned {resp.status_code}: {resp.text[:200]}"
         except Exception as e:
             return False, f"Teams health check failed: {e}"
@@ -137,11 +145,15 @@ class TeamsToolset(Toolset):
     def get(self, path: str, params: Optional[dict] = None) -> dict:
         assert self.teams_config is not None
         url = f"{GRAPH_API_BASE}{path}"
-        resp = requests.get(url, headers=self._headers(), params=params or {}, timeout=30)
+        resp = requests.get(
+            url, headers=self._headers(), params=params or {}, timeout=30
+        )
         if resp.status_code == 401:
             # Token may have expired, refresh and retry
             self._access_token = self._get_access_token()
-            resp = requests.get(url, headers=self._headers(), params=params or {}, timeout=30)
+            resp = requests.get(
+                url, headers=self._headers(), params=params or {}, timeout=30
+            )
         resp.raise_for_status()
         return resp.json()
 
@@ -170,7 +182,11 @@ class ListTeams(BaseTeamsTool):
 
     def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:
         if not self.toolset.teams_config:
-            return StructuredToolResult(status=StructuredToolResultStatus.ERROR, error="Teams not configured", params=params)
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR,
+                error="Teams not configured",
+                params=params,
+            )
         try:
             limit = params.get("limit", 25)
             data = self.toolset.get("/teams", params={"$top": limit})
@@ -182,7 +198,9 @@ class ListTeams(BaseTeamsTool):
             )
         except Exception as e:
             logging.exception("Failed to list Teams")
-            return StructuredToolResult(status=StructuredToolResultStatus.ERROR, error=str(e), params=params)
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR, error=str(e), params=params
+            )
 
 
 class ListTeamsChannels(BaseTeamsTool):
@@ -206,7 +224,11 @@ class ListTeamsChannels(BaseTeamsTool):
 
     def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:
         if not self.toolset.teams_config:
-            return StructuredToolResult(status=StructuredToolResultStatus.ERROR, error="Teams not configured", params=params)
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR,
+                error="Teams not configured",
+                params=params,
+            )
         team_id = params.get("team_id") or self.toolset.teams_config.default_team_id
         if not team_id:
             return StructuredToolResult(
@@ -224,7 +246,9 @@ class ListTeamsChannels(BaseTeamsTool):
             )
         except Exception as e:
             logging.exception("Failed to list Teams channels")
-            return StructuredToolResult(status=StructuredToolResultStatus.ERROR, error=str(e), params=params)
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR, error=str(e), params=params
+            )
 
 
 class GetTeamsChannelMessages(BaseTeamsTool):
@@ -258,9 +282,15 @@ class GetTeamsChannelMessages(BaseTeamsTool):
 
     def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:
         if not self.toolset.teams_config:
-            return StructuredToolResult(status=StructuredToolResultStatus.ERROR, error="Teams not configured", params=params)
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR,
+                error="Teams not configured",
+                params=params,
+            )
         team_id = params.get("team_id") or self.toolset.teams_config.default_team_id
-        channel_id = params.get("channel_id") or self.toolset.teams_config.default_channel_id
+        channel_id = (
+            params.get("channel_id") or self.toolset.teams_config.default_channel_id
+        )
         if not team_id:
             return StructuredToolResult(
                 status=StructuredToolResultStatus.ERROR,
@@ -286,7 +316,9 @@ class GetTeamsChannelMessages(BaseTeamsTool):
             )
         except Exception as e:
             logging.exception("Failed to get Teams channel messages")
-            return StructuredToolResult(status=StructuredToolResultStatus.ERROR, error=str(e), params=params)
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR, error=str(e), params=params
+            )
 
 
 class GetTeamsChannelMessage(BaseTeamsTool):
@@ -319,9 +351,15 @@ class GetTeamsChannelMessage(BaseTeamsTool):
 
     def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:
         if not self.toolset.teams_config:
-            return StructuredToolResult(status=StructuredToolResultStatus.ERROR, error="Teams not configured", params=params)
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR,
+                error="Teams not configured",
+                params=params,
+            )
         team_id = params.get("team_id") or self.toolset.teams_config.default_team_id
-        channel_id = params.get("channel_id") or self.toolset.teams_config.default_channel_id
+        channel_id = (
+            params.get("channel_id") or self.toolset.teams_config.default_channel_id
+        )
         message_id = params.get("message_id", "")
         if not team_id:
             return StructuredToolResult(
@@ -336,11 +374,19 @@ class GetTeamsChannelMessage(BaseTeamsTool):
                 params=params,
             )
         if not message_id:
-            return StructuredToolResult(status=StructuredToolResultStatus.ERROR, error="message_id is required", params=params)
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR,
+                error="message_id is required",
+                params=params,
+            )
         try:
             # Get message and its replies
-            message_data = self.toolset.get(f"/teams/{team_id}/channels/{channel_id}/messages/{message_id}")
-            replies_data = self.toolset.get(f"/teams/{team_id}/channels/{channel_id}/messages/{message_id}/replies")
+            message_data = self.toolset.get(
+                f"/teams/{team_id}/channels/{channel_id}/messages/{message_id}"
+            )
+            replies_data = self.toolset.get(
+                f"/teams/{team_id}/channels/{channel_id}/messages/{message_id}/replies"
+            )
             result = {
                 "message": message_data,
                 "replies": replies_data,
@@ -352,8 +398,16 @@ class GetTeamsChannelMessage(BaseTeamsTool):
             )
         except requests.HTTPError as e:
             if e.response is not None and e.response.status_code == 404:
-                return StructuredToolResult(status=StructuredToolResultStatus.ERROR, error=f"Message {message_id} not found", params=params)
-            return StructuredToolResult(status=StructuredToolResultStatus.ERROR, error=str(e), params=params)
+                return StructuredToolResult(
+                    status=StructuredToolResultStatus.ERROR,
+                    error=f"Message {message_id} not found",
+                    params=params,
+                )
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR, error=str(e), params=params
+            )
         except Exception as e:
             logging.exception("Failed to get Teams channel message")
-            return StructuredToolResult(status=StructuredToolResultStatus.ERROR, error=str(e), params=params)
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR, error=str(e), params=params
+            )

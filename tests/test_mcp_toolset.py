@@ -120,9 +120,7 @@ class TestMCPGeneral:
             "qty": ToolParameter(
                 type="integer", required=True, description="example for description"
             ),
-            "side": ToolParameter(
-                type="string", required=True, enum=["buy", "sell"]
-            ),
+            "side": ToolParameter(type="string", required=True, enum=["buy", "sell"]),
             "limit_price": ToolParameter(type="number", required=False),
         }
 

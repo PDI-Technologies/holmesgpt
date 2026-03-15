@@ -1,8 +1,8 @@
 name: Docker Build on Tag
-
+# PDI fork: disabled — upstream workflow pushes to robustadev/holmes Docker Hub
+# and GCP registries using upstream credentials. PDI uses pdi-build.yaml instead.
 on:
-  release:
-    types: [published]
+  workflow_dispatch: {}
 
 jobs:
   build:

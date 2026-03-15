@@ -2,14 +2,16 @@
 
 import json
 import logging
-from typing import Any, ClassVar, Optional, Tuple, Type
+from typing import Any, Optional, Tuple, Type
 
 import requests
 from pydantic import Field
 
 from holmes.core.tools import (
     CallablePrerequisite,
-    ClassVar as ToolsClassVar,
+)
+from holmes.core.tools import ClassVar as ToolsClassVar
+from holmes.core.tools import (
     StructuredToolResult,
     StructuredToolResultStatus,
     Tool,
@@ -81,7 +83,10 @@ class PagerDutyToolset(Toolset):
             )
             if resp.status_code == 200:
                 return True, ""
-            return False, f"PagerDuty API returned {resp.status_code}: {resp.text[:200]}"
+            return (
+                False,
+                f"PagerDuty API returned {resp.status_code}: {resp.text[:200]}",
+            )
         except Exception as e:
             return False, f"PagerDuty health check failed: {e}"
 
@@ -96,7 +101,9 @@ class PagerDutyToolset(Toolset):
     def get(self, path: str, params: Optional[dict] = None) -> dict:
         assert self.pd_config is not None
         url = f"{PAGERDUTY_API_BASE}{path}"
-        resp = requests.get(url, headers=self._headers(), params=params or {}, timeout=30)
+        resp = requests.get(
+            url, headers=self._headers(), params=params or {}, timeout=30
+        )
         resp.raise_for_status()
         return resp.json()
 
@@ -141,7 +148,11 @@ class ListPagerDutyIncidents(BasePagerDutyTool):
 
     def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:
         if not self.toolset.pd_config:
-            return StructuredToolResult(status=StructuredToolResultStatus.ERROR, error="PagerDuty not configured", params=params)
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR,
+                error="PagerDuty not configured",
+                params=params,
+            )
         try:
             statuses_raw = params.get("statuses", "triggered,acknowledged")
             statuses = [s.strip() for s in statuses_raw.split(",") if s.strip()]
@@ -168,7 +179,9 @@ class ListPagerDutyIncidents(BasePagerDutyTool):
             )
         except Exception as e:
             logging.exception("Failed to list PagerDuty incidents")
-            return StructuredToolResult(status=StructuredToolResultStatus.ERROR, error=str(e), params=params)
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR, error=str(e), params=params
+            )
 
 
 class GetPagerDutyIncident(BasePagerDutyTool):
@@ -191,10 +204,18 @@ class GetPagerDutyIncident(BasePagerDutyTool):
 
     def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:
         if not self.toolset.pd_config:
-            return StructuredToolResult(status=StructuredToolResultStatus.ERROR, error="PagerDuty not configured", params=params)
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR,
+                error="PagerDuty not configured",
+                params=params,
+            )
         incident_id = params.get("incident_id", "")
         if not incident_id:
-            return StructuredToolResult(status=StructuredToolResultStatus.ERROR, error="incident_id is required", params=params)
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR,
+                error="incident_id is required",
+                params=params,
+            )
         try:
             data = self.toolset.get(f"/incidents/{incident_id}")
             incident = data.get("incident", data)
@@ -206,11 +227,19 @@ class GetPagerDutyIncident(BasePagerDutyTool):
             )
         except requests.HTTPError as e:
             if e.response is not None and e.response.status_code == 404:
-                return StructuredToolResult(status=StructuredToolResultStatus.ERROR, error=f"Incident {incident_id} not found", params=params)
-            return StructuredToolResult(status=StructuredToolResultStatus.ERROR, error=str(e), params=params)
+                return StructuredToolResult(
+                    status=StructuredToolResultStatus.ERROR,
+                    error=f"Incident {incident_id} not found",
+                    params=params,
+                )
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR, error=str(e), params=params
+            )
         except Exception as e:
             logging.exception("Failed to get PagerDuty incident")
-            return StructuredToolResult(status=StructuredToolResultStatus.ERROR, error=str(e), params=params)
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR, error=str(e), params=params
+            )
 
 
 class ListPagerDutyServices(BasePagerDutyTool):
@@ -239,9 +268,15 @@ class ListPagerDutyServices(BasePagerDutyTool):
 
     def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:
         if not self.toolset.pd_config:
-            return StructuredToolResult(status=StructuredToolResultStatus.ERROR, error="PagerDuty not configured", params=params)
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR,
+                error="PagerDuty not configured",
+                params=params,
+            )
         try:
-            query: dict[str, Any] = {"limit": params.get("limit", self.toolset.pd_config.default_limit)}
+            query: dict[str, Any] = {
+                "limit": params.get("limit", self.toolset.pd_config.default_limit)
+            }
             if params.get("query"):
                 query["query"] = params["query"]
             data = self.toolset.get("/services", params=query)
@@ -253,7 +288,9 @@ class ListPagerDutyServices(BasePagerDutyTool):
             )
         except Exception as e:
             logging.exception("Failed to list PagerDuty services")
-            return StructuredToolResult(status=StructuredToolResultStatus.ERROR, error=str(e), params=params)
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR, error=str(e), params=params
+            )
 
 
 class ListPagerDutyAlerts(BasePagerDutyTool):
@@ -276,10 +313,18 @@ class ListPagerDutyAlerts(BasePagerDutyTool):
 
     def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:
         if not self.toolset.pd_config:
-            return StructuredToolResult(status=StructuredToolResultStatus.ERROR, error="PagerDuty not configured", params=params)
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR,
+                error="PagerDuty not configured",
+                params=params,
+            )
         incident_id = params.get("incident_id", "")
         if not incident_id:
-            return StructuredToolResult(status=StructuredToolResultStatus.ERROR, error="incident_id is required", params=params)
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR,
+                error="incident_id is required",
+                params=params,
+            )
         try:
             data = self.toolset.get(f"/incidents/{incident_id}/alerts")
             return StructuredToolResult(
@@ -289,7 +334,9 @@ class ListPagerDutyAlerts(BasePagerDutyTool):
             )
         except Exception as e:
             logging.exception("Failed to list PagerDuty alerts")
-            return StructuredToolResult(status=StructuredToolResultStatus.ERROR, error=str(e), params=params)
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR, error=str(e), params=params
+            )
 
 
 class GetPagerDutyOnCall(BasePagerDutyTool):
@@ -317,13 +364,21 @@ class GetPagerDutyOnCall(BasePagerDutyTool):
 
     def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:
         if not self.toolset.pd_config:
-            return StructuredToolResult(status=StructuredToolResultStatus.ERROR, error="PagerDuty not configured", params=params)
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR,
+                error="PagerDuty not configured",
+                params=params,
+            )
         try:
             query: dict[str, Any] = {}
             if params.get("escalation_policy_ids"):
-                query["escalation_policy_ids[]"] = [p.strip() for p in params["escalation_policy_ids"].split(",")]  # type: ignore[assignment]
+                query["escalation_policy_ids[]"] = [
+                    p.strip() for p in params["escalation_policy_ids"].split(",")
+                ]  # type: ignore[assignment]
             if params.get("schedule_ids"):
-                query["schedule_ids[]"] = [s.strip() for s in params["schedule_ids"].split(",")]  # type: ignore[assignment]
+                query["schedule_ids[]"] = [
+                    s.strip() for s in params["schedule_ids"].split(",")
+                ]  # type: ignore[assignment]
             data = self.toolset.get("/oncalls", params=query)
             return StructuredToolResult(
                 status=StructuredToolResultStatus.SUCCESS,
@@ -333,4 +388,6 @@ class GetPagerDutyOnCall(BasePagerDutyTool):
             )
         except Exception as e:
             logging.exception("Failed to get PagerDuty on-call")
-            return StructuredToolResult(status=StructuredToolResultStatus.ERROR, error=str(e), params=params)
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR, error=str(e), params=params
+            )

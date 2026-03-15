@@ -1,8 +1,8 @@
 name: Publish to PyPI
-
+# PDI fork: disabled — upstream workflow publishes to PyPI using upstream token.
+# PDI does not publish this package to PyPI.
 on:
-  release:
-    types: [published]
+  workflow_dispatch: {}
 
 jobs:
   publish:

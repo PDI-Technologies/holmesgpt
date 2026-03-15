@@ -184,15 +184,15 @@ llm_instructions: |
 ```bash
 # Login
 cat > /tmp/login.json << 'EOF'
-{"username":"admin","password":"HolmesGPT@Dev2026!"}
+{"username":"admin","password":"<HOLMESGPT_ADMIN_PASSWORD>"}
 EOF
 curl -s -c /tmp/cookies.txt -X POST \
-  https://holmesgpt.dev.platform.pditechnologies.com/auth/login \
+  https://<HOLMESGPT_APP_URL>/auth/login \
   -H "Content-Type: application/json" -d @/tmp/login.json
 
 # Check integration status
 curl -s -b /tmp/cookies.txt \
-  https://holmesgpt.dev.platform.pditechnologies.com/api/integrations \
+  https://<HOLMESGPT_APP_URL>/api/integrations \
   | tr '{' '\n' | grep '"name":"my-service"'
 ```
 

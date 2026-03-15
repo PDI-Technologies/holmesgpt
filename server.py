@@ -80,12 +80,14 @@ def _save_investigation(
     try:
         import sys as _sys
         import os as _os
+
         _frontend_dir = _os.path.join(_os.path.dirname(__file__), "infra", "frontend")
         if _frontend_dir not in _sys.path:
             _sys.path.insert(0, _frontend_dir)
         from projects import get_investigation_store, Investigation, ToolCallRecord  # type: ignore  # noqa: PLC0415
 
         from datetime import datetime, timezone
+
         inv = Investigation(
             id=investigation_id,
             started_at=started_at,
@@ -132,12 +134,17 @@ def _investigation_tracking_stream(
             if message.event == StreamEvents.TOOL_RESULT:
                 try:
                     from datetime import datetime, timezone as _tz  # noqa: PLC0415
-                    tool_calls.append({
-                        "tool_name": message.data.get("name", ""),
-                        "tool_input": {},  # not exposed in streaming data
-                        "tool_output": (message.data.get("result") or {}).get("data", ""),
-                        "called_at": datetime.now(_tz.utc).isoformat(),
-                    })
+
+                    tool_calls.append(
+                        {
+                            "tool_name": message.data.get("name", ""),
+                            "tool_input": {},  # not exposed in streaming data
+                            "tool_output": (message.data.get("result") or {}).get(
+                                "data", ""
+                            ),
+                            "called_at": datetime.now(_tz.utc).isoformat(),
+                        }
+                    )
                 except Exception:
                     pass  # never block the stream
 
@@ -511,22 +518,29 @@ def chat(chat_request: ChatRequest, http_request: Request):
         import sys
         import os as _os
         import re as _re
+
         _frontend_dir = _os.path.join(_os.path.dirname(__file__), "infra", "frontend")
         if _frontend_dir not in sys.path:
             sys.path.insert(0, _frontend_dir)
 
         def _extract_source_from_ask(ask: str) -> str:
             """Extract source= value from ask string, e.g. 'source=azure_devops ...'"""
-            m = _re.search(r'\bsource=([A-Za-z0-9_\-]+)', ask or "")
+            m = _re.search(r"\bsource=([A-Za-z0-9_\-]+)", ask or "")
             return m.group(1) if m else ""
 
         def _make_scoped_ai(source: str):
             """Build a scoped ToolCallingLLM capped at MAX_TOOLS_PER_CALL tools."""
             try:
                 from server_frontend import _create_scoped_toolcalling_llm  # type: ignore  # noqa: PLC0415
-                return _create_scoped_toolcalling_llm(config, source, model=chat_request.model)
+
+                return _create_scoped_toolcalling_llm(
+                    config, source, model=chat_request.model
+                )
             except Exception:
-                logging.warning("Failed to build scoped tool executor, falling back to global", exc_info=True)
+                logging.warning(
+                    "Failed to build scoped tool executor, falling back to global",
+                    exc_info=True,
+                )
                 return config.create_toolcalling_llm(
                     dal=dal, model=chat_request.model, tool_results_dir=tool_results_dir
                 )
@@ -534,26 +548,41 @@ def chat(chat_request: ChatRequest, http_request: Request):
         # Build a project-scoped ToolCallingLLM when project_id is provided
         if chat_request.project_id:
             try:
-                from projects import get_store, get_instances_store, build_project_tool_executor  # type: ignore  # noqa: PLC0415
+                from projects import (
+                    get_store,
+                    get_instances_store,
+                    build_project_tool_executor,
+                )  # type: ignore  # noqa: PLC0415
 
                 project = get_store().get(chat_request.project_id)
                 if project:
                     from holmes.core.tool_calling_llm import ToolCallingLLM  # noqa: PLC0415
 
-                    project_executor = build_project_tool_executor(project, config, dal, get_instances_store())
+                    project_executor = build_project_tool_executor(
+                        project, config, dal, get_instances_store()
+                    )
                     ai = ToolCallingLLM(
                         project_executor,
                         config.max_steps,
                         config._get_llm(chat_request.model),
                         tool_results_dir=tool_results_dir,
                     )
-                    logging.info("Using project-scoped tool executor for project '%s'", project.name)
+                    logging.info(
+                        "Using project-scoped tool executor for project '%s'",
+                        project.name,
+                    )
                 else:
-                    logging.warning("Project '%s' not found, falling back to scoped executor", chat_request.project_id)
+                    logging.warning(
+                        "Project '%s' not found, falling back to scoped executor",
+                        chat_request.project_id,
+                    )
                     source = _extract_source_from_ask(chat_request.ask)
                     ai = _make_scoped_ai(source)
             except Exception:
-                logging.warning("Failed to build project executor, falling back to scoped", exc_info=True)
+                logging.warning(
+                    "Failed to build project executor, falling back to scoped",
+                    exc_info=True,
+                )
                 source = _extract_source_from_ask(chat_request.ask)
                 ai = _make_scoped_ai(source)
         else:

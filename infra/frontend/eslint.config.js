@@ -3,6 +3,7 @@ import tsPlugin from '@typescript-eslint/eslint-plugin'
 import tsParser from '@typescript-eslint/parser'
 import reactHooks from 'eslint-plugin-react-hooks'
 import reactRefresh from 'eslint-plugin-react-refresh'
+import globals from 'globals'
 
 export default [
   // Base JS recommended rules
@@ -17,6 +18,13 @@ export default [
         ecmaVersion: 'latest',
         sourceType: 'module',
         ecmaFeatures: { jsx: true },
+      },
+      // Declare browser + ES2021 globals so window, document, fetch, crypto,
+      // localStorage, setTimeout, navigator, React JSX transform, etc. are known.
+      globals: {
+        ...globals.browser,
+        ...globals.es2021,
+        React: 'readonly',
       },
     },
     plugins: {
@@ -33,6 +41,10 @@ export default [
 
       // React Refresh — warn on non-component exports from component files
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
+
+      // Disable no-undef for TypeScript files — tsc handles type checking;
+      // ESLint no-undef doesn't understand TS types like RequestInit, HTMLElement, etc.
+      'no-undef': 'off',
 
       // Relax a few rules that conflict with the existing codebase style
       '@typescript-eslint/no-explicit-any': 'warn',          // warn, not error

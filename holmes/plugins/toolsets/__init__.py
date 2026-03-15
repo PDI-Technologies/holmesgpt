@@ -234,7 +234,9 @@ def load_toolsets_from_config(
                     if "enabled" in config and validated_toolset is not None:
                         validated_toolset.enabled = config["enabled"]
                 else:
-                    logging.warning("No factory found for Python toolset base '%s'", base_name)
+                    logging.warning(
+                        "No factory found for Python toolset base '%s'", base_name
+                    )
             # MCP server is not a built-in toolset, so we need to set the type explicitly
             elif toolset_type == ToolsetType.MCP.value:
                 validated_toolset = RemoteMCPToolset(**config, name=name)

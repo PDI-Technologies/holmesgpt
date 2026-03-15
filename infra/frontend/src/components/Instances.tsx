@@ -278,7 +278,7 @@ export default function Instances() {
     try {
       await api.deleteInstance(id)
       load()
-    } catch (e) {
+    } catch {
       // silently ignore — instance may already be gone
     } finally {
       setDeleting(null)

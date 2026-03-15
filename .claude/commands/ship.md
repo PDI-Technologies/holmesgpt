@@ -2,12 +2,12 @@ Build and deploy a new version of HolmesGPT to the PDI dev environment.
 
 Follow the deploy-to-aws skill. Execute these steps in order:
 
-1. Verify AWS access: `aws sts get-caller-identity --profile pdi-platform-dev`
+1. Verify AWS access: `aws sts get-caller-identity --profile <AWS_PROFILE>`
 
 2. Build and push the Docker image:
 ```bash
-ECR_REGISTRY="717423812395.dkr.ecr.us-east-1.amazonaws.com"
-aws ecr get-login-password --region us-east-1 --profile pdi-platform-dev \
+ECR_REGISTRY="<AWS_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com"
+aws ecr get-login-password --region us-east-1 --profile <AWS_PROFILE> \
   | docker login --username AWS --password-stdin $ECR_REGISTRY
 docker build -f infra/Dockerfile.frontend -t $ECR_REGISTRY/holmesgpt:latest .
 docker push $ECR_REGISTRY/holmesgpt:latest
@@ -37,10 +37,10 @@ This also creates/updates the DynamoDB table `holmesgpt-dev-config` (defined in 
 
 4. Verify the deployment:
 ```bash
-aws eks update-kubeconfig --name holmesgpt-dev --profile pdi-platform-dev --region us-east-1
+aws eks update-kubeconfig --name holmesgpt-dev --profile <AWS_PROFILE> --region us-east-1
 kubectl rollout status deployment/holmes-holmes -n holmesgpt --timeout=120s
-curl -s https://holmesgpt.dev.platform.pditechnologies.com/healthz
-curl -s https://holmesgpt.dev.platform.pditechnologies.com/readyz
+curl -s https://<HOLMESGPT_APP_URL>/healthz
+curl -s https://<HOLMESGPT_APP_URL>/readyz
 ```
 
 5. Report the final status to the user including pod state and health check results.

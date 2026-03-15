@@ -1,14 +1,14 @@
 # Skill: deploy-to-aws
 
-Build and deploy HolmesGPT to the PDI AWS environment (`pdi-platform-dev`).
+Build and deploy HolmesGPT to the PDI AWS environment (`<AWS_PROFILE>`).
 
 ## Deployment Overview
 
 ```
 infra/Dockerfile.frontend  →  ECR (holmesgpt:latest)
 infra/helm.tf              →  EKS (holmesgpt-dev, us-east-1)
-URL: https://holmesgpt.dev.platform.pditechnologies.com
-Auth: admin / HolmesGPT@Dev2026!
+URL: https://<HOLMESGPT_APP_URL>
+Auth: admin / <HOLMESGPT_ADMIN_PASSWORD>
 ```
 
 The deployment uses a **custom Docker image** (`infra/Dockerfile.frontend`) that bundles:
@@ -22,13 +22,13 @@ The deployment uses a **custom Docker image** (`infra/Dockerfile.frontend`) that
 
 ```bash
 # Verify AWS profile is configured
-aws sts get-caller-identity --profile pdi-platform-dev
+aws sts get-caller-identity --profile <AWS_PROFILE>
 
 # Verify Docker is running
 docker info
 
 # Verify kubectl access
-aws eks update-kubeconfig --name holmesgpt-dev --profile pdi-platform-dev --region us-east-1
+aws eks update-kubeconfig --name holmesgpt-dev --profile <AWS_PROFILE> --region us-east-1
 kubectl get nodes
 ```
 
@@ -40,12 +40,12 @@ The frontend Dockerfile is at `infra/Dockerfile.frontend` (not the root `Dockerf
 
 ```bash
 # Get ECR registry URL
-ECR_REGISTRY="717423812395.dkr.ecr.us-east-1.amazonaws.com"
+ECR_REGISTRY="<AWS_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com"
 ECR_REPO="holmesgpt"
 IMAGE_TAG="latest"  # or use git SHA: $(git rev-parse --short HEAD)
 
 # Authenticate Docker to ECR
-aws ecr get-login-password --region us-east-1 --profile pdi-platform-dev \
+aws ecr get-login-password --region us-east-1 --profile <AWS_PROFILE> \
   | docker login --username AWS --password-stdin $ECR_REGISTRY
 
 # Build the image (run from repo root)
@@ -81,7 +81,7 @@ cd infra
 # Retrieve Anthropic API key from Secrets Manager (PDI AI Gateway key, format: pdi_...)
 ANTHROPIC_API_KEY=$(aws secretsmanager get-secret-value \
   --secret-id holmesgpt-dev/anthropic-api-key \
-  --profile pdi-platform-dev --region us-east-1 \
+  --profile <AWS_PROFILE> --region us-east-1 \
   --query SecretString --output text \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['ANTHROPIC_API_KEY'])")
 
@@ -146,10 +146,10 @@ INFO     Uvicorn running on http://0.0.0.0:5050
 
 ```bash
 # Health check (no auth required)
-curl -s https://holmesgpt.dev.platform.pditechnologies.com/healthz
+curl -s https://<HOLMESGPT_APP_URL>/healthz
 # Expected: {"status":"healthy"}
 
-curl -s https://holmesgpt.dev.platform.pditechnologies.com/readyz
+curl -s https://<HOLMESGPT_APP_URL>/readyz
 # Expected: {"status":"ready","models":["anthropic/claude-sonnet-4-5-20250929"]}
 ```
 
@@ -157,15 +157,15 @@ curl -s https://holmesgpt.dev.platform.pditechnologies.com/readyz
 
 ```bash
 cat > /tmp/login.json << 'EOF'
-{"username":"admin","password":"HolmesGPT@Dev2026!"}
+{"username":"admin","password":"<HOLMESGPT_ADMIN_PASSWORD>"}
 EOF
 
 curl -s -c /tmp/cookies.txt \
-  -X POST https://holmesgpt.dev.platform.pditechnologies.com/auth/login \
+  -X POST https://<HOLMESGPT_APP_URL>/auth/login \
   -H "Content-Type: application/json" -d @/tmp/login.json
 
 curl -s -b /tmp/cookies.txt \
-  https://holmesgpt.dev.platform.pditechnologies.com/api/integrations \
+  https://<HOLMESGPT_APP_URL>/api/integrations \
   | tr '{' '\n' | grep '"status"' | grep -v "disabled" | head -20
 ```
 
@@ -245,11 +245,11 @@ If empty, the `npm run build` step in `Dockerfile.frontend` failed. Check Docker
 
 | Setting | Value |
 |---|---|
-| AWS Account | `pdi-platform-dev` (717423812395) |
+| AWS Account | `<AWS_PROFILE>` (<AWS_ACCOUNT_ID>) |
 | Region | `us-east-1` |
 | EKS Cluster | `holmesgpt-dev` |
 | Namespace | `holmesgpt` |
-| ECR Repo | `717423812395.dkr.ecr.us-east-1.amazonaws.com/holmesgpt` |
+| ECR Repo | `<AWS_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/holmesgpt` |
 | LLM Model | `anthropic/claude-sonnet-4-5-20250929` |
 | API Gateway | `https://ai-gateway.platform.pditechnologies.com` |
 | Node Type | `t3.medium` (1-2 nodes) |

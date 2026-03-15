@@ -1,13 +1,13 @@
 # Skill: debug-deployment
 
-Diagnose and fix issues with the live HolmesGPT deployment at `holmesgpt.dev.platform.pditechnologies.com`.
+Diagnose and fix issues with the live HolmesGPT deployment at `<HOLMESGPT_APP_URL>`.
 
 ## Quick Health Check
 
 ```bash
 # No auth required
-curl -s https://holmesgpt.dev.platform.pditechnologies.com/healthz
-curl -s https://holmesgpt.dev.platform.pditechnologies.com/readyz
+curl -s https://<HOLMESGPT_APP_URL>/healthz
+curl -s https://<HOLMESGPT_APP_URL>/readyz
 ```
 
 Expected: `{"status":"healthy"}` and `{"status":"ready","models":["anthropic/claude-sonnet-4-5-20250929"]}`
@@ -22,11 +22,11 @@ The UI uses session cookie auth (not HTTP Basic Auth). Always use a file for the
 
 ```bash
 cat > /tmp/login.json << 'EOF'
-{"username":"admin","password":"HolmesGPT@Dev2026!"}
+{"username":"admin","password":"<HOLMESGPT_ADMIN_PASSWORD>"}
 EOF
 
 curl -s -c /tmp/cookies.txt \
-  -X POST https://holmesgpt.dev.platform.pditechnologies.com/auth/login \
+  -X POST https://<HOLMESGPT_APP_URL>/auth/login \
   -H "Content-Type: application/json" \
   -d @/tmp/login.json
 # Expected: {"ok":true}
@@ -35,8 +35,8 @@ curl -s -c /tmp/cookies.txt \
 For programmatic access, use Bearer token (password as token):
 
 ```bash
-curl -s -H "Authorization: Bearer HolmesGPT@Dev2026!" \
-  https://holmesgpt.dev.platform.pditechnologies.com/api/integrations
+curl -s -H "Authorization: Bearer <HOLMESGPT_ADMIN_PASSWORD>" \
+  https://<HOLMESGPT_APP_URL>/api/integrations
 ```
 
 ---
@@ -45,7 +45,7 @@ curl -s -H "Authorization: Bearer HolmesGPT@Dev2026!" \
 
 ```bash
 curl -s -b /tmp/cookies.txt \
-  https://holmesgpt.dev.platform.pditechnologies.com/api/integrations \
+  https://<HOLMESGPT_APP_URL>/api/integrations \
   | tr '{' '\n' | grep '"status"' | grep -v "disabled" \
   | grep -oE '"name":"[^"]+"|"status":"[^"]+"|"error":"[^"]+"' \
   | paste - - -
@@ -100,7 +100,7 @@ The MCP server connected but returned no tools. Check:
 
 ```bash
 curl -s -b /tmp/cookies.txt \
-  https://holmesgpt.dev.platform.pditechnologies.com/api/projects \
+  https://<HOLMESGPT_APP_URL>/api/projects \
   | python3 -c "import sys,json; [print(p['name'], '-', len(p['instances']), 'instances') for p in json.load(sys.stdin)['projects']]"
 ```
 
@@ -109,7 +109,7 @@ curl -s -b /tmp/cookies.txt \
 ```bash
 aws dynamodb scan \
   --table-name holmesgpt-dev-config \
-  --profile pdi-platform-dev \
+  --profile <AWS_PROFILE> \
   --region us-east-1 \
   --filter-expression "begins_with(pk, :p)" \
   --expression-attribute-values '{":p":{"S":"PROJECT#"}}' \
@@ -129,7 +129,7 @@ kubectl exec -n holmesgpt deployment/holmes-holmes -- \
 ```bash
 # Get a project ID first
 PROJECT_ID=$(curl -s -b /tmp/cookies.txt \
-  https://holmesgpt.dev.platform.pditechnologies.com/api/projects \
+  https://<HOLMESGPT_APP_URL>/api/projects \
   | python3 -c "import sys,json; p=json.load(sys.stdin)['projects']; print(p[0]['id'] if p else '')")
 
 cat > /tmp/chat-project.json << EOF
@@ -137,7 +137,7 @@ cat > /tmp/chat-project.json << EOF
 EOF
 
 curl -s -b /tmp/cookies.txt \
-  -X POST https://holmesgpt.dev.platform.pditechnologies.com/api/chat \
+  -X POST https://<HOLMESGPT_APP_URL>/api/chat \
   -H "Content-Type: application/json" \
   -d @/tmp/chat-project.json \
   | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('analysis','')[:500])"
@@ -166,7 +166,7 @@ kubectl logs -n holmesgpt -l app.kubernetes.io/name=holmes --tail=100 \
 ```bash
 aws eks update-kubeconfig \
   --name holmesgpt-dev \
-  --profile pdi-platform-dev \
+  --profile <AWS_PROFILE> \
   --region us-east-1
 ```
 
@@ -245,7 +245,7 @@ The `/api/integrations/{name}/config` endpoint supports live config updates:
 
 ```bash
 curl -s -b /tmp/cookies.txt \
-  -X PUT https://holmesgpt.dev.platform.pditechnologies.com/api/integrations/prometheus%2Fmetrics/config \
+  -X PUT https://<HOLMESGPT_APP_URL>/api/integrations/prometheus%2Fmetrics/config \
   -H "Content-Type: application/json" \
   -d '{"config": {"prometheus_url": "http://prometheus:9090"}, "enabled": true}'
 ```
@@ -256,7 +256,7 @@ Note: Hot-reload changes are in-memory only and lost on pod restart. Persist cha
 
 ```bash
 curl -s -b /tmp/cookies.txt \
-  -X PUT https://holmesgpt.dev.platform.pditechnologies.com/api/integrations/datadog%2Flogs/toggle \
+  -X PUT https://<HOLMESGPT_APP_URL>/api/integrations/datadog%2Flogs/toggle \
   -H "Content-Type: application/json" \
   -d '{"enabled": false}'
 ```

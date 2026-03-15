@@ -14,5 +14,9 @@ resource "aws_dynamodb_table" "holmes_config" {
     type = "S"
   }
 
+  point_in_time_recovery {
+    enabled = true
+  }
+
   tags = merge(var.tags, { Name = "${local.cluster_name}-config" })
 }

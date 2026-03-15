@@ -60,7 +60,7 @@ export function useInvestigate(projectId?: string | null) {
         setLoading(false)
       }
     },
-    [],
+    [projectId],
   )
 
   const clearInvestigations = useCallback(() => {

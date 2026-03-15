@@ -11,10 +11,10 @@ Use the `manage-projects` skill for full reference on the Projects feature.
 ```bash
 # Login first
 cat > /tmp/login.json << 'EOF'
-{"username":"admin","password":"HolmesGPT@Dev2026!"}
+{"username":"admin","password":"<HOLMESGPT_ADMIN_PASSWORD>"}
 EOF
 curl -s -c /tmp/cookies.txt -X POST \
-  https://holmesgpt.dev.platform.pditechnologies.com/auth/login \
+  https://<HOLMESGPT_APP_URL>/auth/login \
   -H "Content-Type: application/json" -d @/tmp/login.json
 
 # Create project
@@ -26,7 +26,7 @@ cat > /tmp/project.json << 'EOF'
     {
       "type": "grafana/dashboards",
       "name": "grafana-myteam",
-      "secret_arn": "arn:aws:secretsmanager:us-east-1:717423812395:secret:holmesgpt-dev/project-grafana-myteam"
+      "secret_arn": "arn:aws:secretsmanager:us-east-1:<AWS_ACCOUNT_ID>:secret:holmesgpt-dev/project-grafana-myteam"
     },
     {
       "type": "aws_api",
@@ -43,7 +43,7 @@ cat > /tmp/project.json << 'EOF'
 }
 EOF
 curl -s -b /tmp/cookies.txt -X POST \
-  https://holmesgpt.dev.platform.pditechnologies.com/api/projects \
+  https://<HOLMESGPT_APP_URL>/api/projects \
   -H "Content-Type: application/json" -d @/tmp/project.json | python3 -m json.tool
 ```
 
@@ -51,7 +51,7 @@ curl -s -b /tmp/cookies.txt -X POST \
 
 ```bash
 curl -s -b /tmp/cookies.txt \
-  https://holmesgpt.dev.platform.pditechnologies.com/api/projects \
+  https://<HOLMESGPT_APP_URL>/api/projects \
   | python3 -c "import sys,json; [print(p['name'], '-', len(p['instances']), 'instances') for p in json.load(sys.stdin)['projects']]"
 ```
 
@@ -62,13 +62,13 @@ curl -s -b /tmp/cookies.txt \
 aws secretsmanager create-secret \
   --name "holmesgpt-dev/project-grafana-myteam" \
   --secret-string '{"api_url":"https://grafana-myteam.pdisoftware.com","api_key":"glsa_xxxx"}' \
-  --profile pdi-platform-dev --region us-east-1
+  --profile <AWS_PROFILE> --region us-east-1
 
 # MCP (ADO/Atlassian/Salesforce) secret
 aws secretsmanager create-secret \
   --name "holmesgpt-dev/project-ado-myteam" \
   --secret-string '{"api_key":"your-per-team-api-key"}' \
-  --profile pdi-platform-dev --region us-east-1
+  --profile <AWS_PROFILE> --region us-east-1
 ```
 
 ## Debugging

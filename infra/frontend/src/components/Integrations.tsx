@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { api, type Integration, type AwsAccount, type Instance, type ConfigField, type WebhookInfo } from '../lib/api'
 
 type StatusFilter = 'all' | 'enabled' | 'disabled' | 'failed'
@@ -294,15 +294,15 @@ function InstancesTab({
   const [migrating, setMigrating] = useState(false)
   const [migrateError, setMigrateError] = useState<string | null>(null)
 
-  const load = () => {
+  const load = useCallback(() => {
     setLoading(true)
     api.listInstances()
       .then((all) => setInstances((all ?? []).filter((i) => i.type === integration.name)))
       .catch(() => setInstances([]))
       .finally(() => setLoading(false))
-  }
+  }, [integration.name])
 
-  useEffect(() => { load() }, [integration.name])
+  useEffect(() => { load() }, [load])
 
   const handleDeleteConfirmed = async (id: string) => {
     setConfirmDeleteId(null)
@@ -310,7 +310,7 @@ function InstancesTab({
     try {
       await api.deleteInstance(id)
       load()
-    } catch (e) {
+    } catch {
       // silently ignore — instance may already be gone
     } finally {
       setDeleting(null)

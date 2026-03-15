@@ -1,9 +1,10 @@
 # This runs on every PR to test that we are properly building binaries that work.
 # Branch protection should require the "build-and-test-gate" job.
+# PDI fork: pull_request trigger disabled — upstream workflow builds CLI binaries
+# and posts results to upstream infrastructure. PDI uses pdi-build.yaml instead.
 name: Build and test HolmesGPT
 
 on:
-  pull_request:
   workflow_dispatch:
 
 jobs:
