@@ -1,7 +1,7 @@
 # Post-deployment E2E smoke tests for HolmesGPT PDI.
 #
 # Triggers:
-#   - After pdi-iac.yaml completes (workflow_run) — automatic post-deploy gate
+#   - After pdi-deploy.yaml completes (workflow_run) — automatic post-deploy gate
 #   - workflow_dispatch — manual trigger for any environment
 #
 # Required GitHub Secrets:
@@ -14,9 +14,9 @@
 name: PDI — E2E Tests
 
 on:
-  # Run automatically after IaC apply completes
+  # Run automatically after Deploy completes (Deploy builds image + rolls out pods)
   workflow_run:
-    workflows: ['PDI — IaC']
+    workflows: ['PDI — Deploy']
     types: [completed]
     branches:
       - master
