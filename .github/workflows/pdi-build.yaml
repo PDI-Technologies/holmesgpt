@@ -37,9 +37,10 @@ jobs:
     name: Build Docker image
     runs-on: ubuntu-latest
 
-    # Only push for same-repo PRs (not forks) — forks have no AWS credentials
+    # Only push for same-repo PRs (not forks) — forks have no AWS credentials.
+    # Also requires PDI_DEV_ECR_REGISTRY secret to be set; without it we build only.
     env:
-      SHOULD_PUSH: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.push_image == 'yes') || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) }}
+      SHOULD_PUSH: ${{ secrets.PDI_DEV_ECR_REGISTRY != '' && ((github.event_name == 'workflow_dispatch' && github.event.inputs.push_image == 'yes') || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)) }}
 
     steps:
       - name: Checkout
@@ -63,9 +64,19 @@ jobs:
         id: ecr-login
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Compute short SHA
+      - name: Compute short SHA and image tags
         id: sha
-        run: echo "short=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+        run: |
+          echo "short=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+          PR_NUM="${{ github.event.pull_request.number || 'manual' }}"
+          SHORT="${GITHUB_SHA::7}"
+          if [ -n "$ECR_REGISTRY" ]; then
+            echo "tags=${ECR_REGISTRY}/${ECR_REPOSITORY}:${GITHUB_SHA}
+          ${ECR_REGISTRY}/${ECR_REPOSITORY}:pr-${PR_NUM}-${SHORT}" >> $GITHUB_OUTPUT
+          else
+            # No ECR registry configured — use a local tag for build-only validation
+            echo "tags=holmesgpt:${SHORT}" >> $GITHUB_OUTPUT
+          fi
 
       - name: Build (and push to dev ECR if same-repo)
         uses: docker/build-push-action@v6
@@ -73,9 +84,7 @@ jobs:
           context: .
           file: infra/Dockerfile.frontend
           push: ${{ env.SHOULD_PUSH == 'true' }}
-          tags: |
-            ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
-            ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:pr-${{ github.event.pull_request.number || 'manual' }}-${{ steps.sha.outputs.short }}
+          tags: ${{ steps.sha.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64
@@ -146,6 +155,10 @@ jobs:
             echo "- Tag: \`$GH_SHA\`" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "> Prod ECR push happens automatically at deploy time (push to \`release/**\`)." >> $GITHUB_STEP_SUMMARY
+          elif [ -z "$ECR_REGISTRY" ]; then
+            echo "🔨 **Image built (not pushed — PDI_DEV_ECR_REGISTRY secret not configured)**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "> Set the \`PDI_DEV_ECR_REGISTRY\` secret in GitHub repository settings to enable ECR push." >> $GITHUB_STEP_SUMMARY
           else
             echo "🔨 **Image built (not pushed — fork PR)**" >> $GITHUB_STEP_SUMMARY
           fi
