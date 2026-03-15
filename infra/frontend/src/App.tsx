@@ -55,14 +55,16 @@ export default function App() {
       selectedProject={selectedProject}
       onSelectProject={selectProject}
     >
-      {page === 'chat' && <Chat projectId={selectedProjectId} />}
-      {page === 'investigate' && <Investigate projectId={selectedProjectId} selectedProject={selectedProject} />}
-      {page === 'history' && <InvestigationHistory />}
-      {page === 'integrations' && <Integrations />}
-      {page === 'settings' && <Settings />}
-      {page === 'projects' && <Projects projects={projects} onReload={reloadProjects} />}
-      {page === 'instances' && <Instances />}
-      {page === 'docs' && <Docs />}
+      <div key={page} className="page-transition h-full">
+        {page === 'chat' && <Chat projectId={selectedProjectId} />}
+        {page === 'investigate' && <Investigate projectId={selectedProjectId} selectedProject={selectedProject} />}
+        {page === 'history' && <InvestigationHistory />}
+        {page === 'integrations' && <Integrations />}
+        {page === 'settings' && <Settings />}
+        {page === 'projects' && <Projects projects={projects} onReload={reloadProjects} />}
+        {page === 'instances' && <Instances />}
+        {page === 'docs' && <Docs />}
+      </div>
     </Layout>
   )
 }
