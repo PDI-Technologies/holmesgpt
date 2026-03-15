@@ -1,0 +1,5 @@
+# Playwright auth state — contains session cookies, never commit
+.auth/
+node_modules/
+playwright-report/
+test-results/

@@ -1,0 +1,140 @@
+# Post-deployment E2E smoke tests for HolmesGPT PDI.
+#
+# Triggers:
+#   - After pdi-iac.yaml completes (workflow_run) — automatic post-deploy gate
+#   - workflow_dispatch — manual trigger for any environment
+#
+# Required GitHub Secrets:
+#   PDI_DEV_HOLMES_UI_PASSWORD   — Holmes UI login password (dev)
+#   PDI_PROD_HOLMES_UI_PASSWORD  — Holmes UI login password (prod)
+#
+# Optional:
+#   BASE_URL override via workflow_dispatch input
+
+name: PDI — E2E Tests
+
+on:
+  # Run automatically after IaC apply completes
+  workflow_run:
+    workflows: ['PDI — IaC']
+    types: [completed]
+    branches:
+      - master
+      - 'release/**'
+
+  # Manual trigger for any environment
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - prod
+      suite:
+        description: 'Test suite to run'
+        required: true
+        default: 'smoke'
+        type: choice
+        options:
+          - smoke
+          - full
+
+concurrency:
+  group: pdi-e2e-${{ github.ref }}
+  cancel-in-progress: true   # Cancel stale E2E runs; they're read-only
+
+jobs:
+  e2e:
+    name: E2E ${{ github.event.inputs.suite || 'smoke' }} — ${{ github.event.inputs.environment || (github.ref == 'refs/heads/master' && 'dev') || 'prod' }}
+    runs-on: ubuntu-latest
+
+    # Only run if the triggering IaC workflow succeeded (or manual dispatch)
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+
+    env:
+      ENVIRONMENT: ${{ github.event.inputs.environment || (github.ref == 'refs/heads/master' && 'dev') || 'prod' }}
+      SUITE: ${{ github.event.inputs.suite || 'smoke' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set environment variables
+        run: |
+          if [ "$ENVIRONMENT" = "prod" ]; then
+            echo "BASE_URL=https://holmesgpt.platform.pditechnologies.com" >> $GITHUB_ENV
+            echo "HOLMES_PASSWORD=${{ secrets.PDI_PROD_HOLMES_UI_PASSWORD }}" >> $GITHUB_ENV
+          else
+            echo "BASE_URL=https://holmesgpt.dev.platform.pditechnologies.com" >> $GITHUB_ENV
+            echo "HOLMES_PASSWORD=${{ secrets.PDI_DEV_HOLMES_UI_PASSWORD }}" >> $GITHUB_ENV
+          fi
+          echo "HOLMES_USERNAME=admin" >> $GITHUB_ENV
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: e2e/package-lock.json
+
+      - name: Install dependencies
+        working-directory: e2e
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: e2e
+        run: npx playwright install chromium --with-deps
+
+      - name: Run smoke tests
+        if: env.SUITE == 'smoke'
+        working-directory: e2e
+        run: npx playwright test --grep @smoke
+        env:
+          BASE_URL: ${{ env.BASE_URL }}
+          HOLMES_USERNAME: ${{ env.HOLMES_USERNAME }}
+          HOLMES_PASSWORD: ${{ env.HOLMES_PASSWORD }}
+          CI: true
+
+      - name: Run full test suite
+        if: env.SUITE == 'full'
+        working-directory: e2e
+        run: npx playwright test --grep @full
+        env:
+          BASE_URL: ${{ env.BASE_URL }}
+          HOLMES_USERNAME: ${{ env.HOLMES_USERNAME }}
+          HOLMES_PASSWORD: ${{ env.HOLMES_PASSWORD }}
+          CI: true
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ env.ENVIRONMENT }}-${{ github.run_number }}
+          path: e2e/playwright-report/
+          retention-days: 14
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ env.ENVIRONMENT }}-${{ github.run_number }}
+          path: e2e/test-results/
+          retention-days: 7
+
+      - name: E2E summary
+        if: always()
+        run: |
+          echo "## E2E Test Summary — \`$ENVIRONMENT\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Suite**: \`$SUITE\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Target**: \`$BASE_URL\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "> Download the Playwright HTML report from the workflow artifacts for detailed results." >> $GITHUB_STEP_SUMMARY
