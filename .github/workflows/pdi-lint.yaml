@@ -76,8 +76,8 @@ jobs:
           poetry run isort \
             --check-only \
             --profile black \
-            --skip holmes/main.py \
-            --skip server.py \
+            --skip-glob "holmes/main.py" \
+            --skip-glob "server.py" \
             .
 
       - name: mypy type check

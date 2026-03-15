@@ -67,12 +67,17 @@ jobs:
       - name: Compute short SHA and image tags
         id: sha
         run: |
-          echo "short=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
-          PR_NUM="${{ github.event.pull_request.number || 'manual' }}"
           SHORT="${GITHUB_SHA::7}"
+          echo "short=${SHORT}" >> $GITHUB_OUTPUT
+          PR_NUM="${{ github.event.pull_request.number || 'manual' }}"
           if [ -n "$ECR_REGISTRY" ]; then
-            echo "tags=${ECR_REGISTRY}/${ECR_REPOSITORY}:${GITHUB_SHA}
-          ${ECR_REGISTRY}/${ECR_REPOSITORY}:pr-${PR_NUM}-${SHORT}" >> $GITHUB_OUTPUT
+            # Use heredoc syntax for multiline output value
+            {
+              echo "tags<<EOF"
+              echo "${ECR_REGISTRY}/${ECR_REPOSITORY}:${GITHUB_SHA}"
+              echo "${ECR_REGISTRY}/${ECR_REPOSITORY}:pr-${PR_NUM}-${SHORT}"
+              echo "EOF"
+            } >> $GITHUB_OUTPUT
           else
             # No ECR registry configured — use a local tag for build-only validation
             echo "tags=holmesgpt:${SHORT}" >> $GITHUB_OUTPUT
