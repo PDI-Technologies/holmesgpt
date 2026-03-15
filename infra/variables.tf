@@ -171,6 +171,96 @@ variable "grafana_api_key" {
   default     = ""
 }
 
+# Datadog
+variable "datadog_api_key" {
+  description = "Datadog API key"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "datadog_app_key" {
+  description = "Datadog application key"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "datadog_api_url" {
+  description = "Datadog API URL"
+  type        = string
+  default     = "https://api.datadoghq.com"
+}
+
+# PagerDuty
+variable "pagerduty_api_key" {
+  description = "PagerDuty API key"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "pagerduty_user_email" {
+  description = "PagerDuty user email for API calls"
+  type        = string
+  default     = ""
+}
+
+variable "pagerduty_webhook_secret" {
+  description = "PagerDuty webhook secret for signature verification"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+# Azure DevOps webhook
+variable "ado_webhook_username" {
+  description = "Azure DevOps webhook basic auth username"
+  type        = string
+  default     = ""
+}
+
+variable "ado_webhook_password" {
+  description = "Azure DevOps webhook basic auth password"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "ado_pat" {
+  description = "Azure DevOps Personal Access Token"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "ado_organization" {
+  description = "Azure DevOps organization name"
+  type        = string
+  default     = ""
+}
+
+# Salesforce webhook
+variable "salesforce_webhook_token" {
+  description = "Salesforce webhook token"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "salesforce_instance_url" {
+  description = "Salesforce instance URL"
+  type        = string
+  default     = ""
+}
+
+variable "salesforce_access_token" {
+  description = "Salesforce access token"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
 # Tags
 variable "tags" {
   description = "Common tags for all resources"
