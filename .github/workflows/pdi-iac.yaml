@@ -237,6 +237,9 @@ jobs:
         if: env.HAVE_CREDS == 'true'
         working-directory: infra
         run: |
+          # Unset AWS_PROFILE so the AWS CLI uses env-var credentials, not a named profile.
+          # Setting AWS_PROFILE="" causes "config profile () could not be found" errors.
+          unset AWS_PROFILE
           tofu init \
             -backend-config="bucket=${{ env.TF_STATE_BUCKET }}" \
             -backend-config="key=${{ env.TF_STATE_KEY }}" \
@@ -244,7 +247,6 @@ jobs:
             -backend-config="encrypt=true" \
             -reconfigure
         env:
-          AWS_PROFILE: ""
           AWS_DEFAULT_REGION: ${{ env.AWS_REGION }}
 
       # ── Plan ──────────────────────────────────────────────────────────────────
@@ -254,6 +256,9 @@ jobs:
         id: plan
         working-directory: infra
         run: |
+          # Unset AWS_PROFILE so the AWS CLI uses env-var credentials, not a named profile.
+          # Setting AWS_PROFILE="" causes "config profile () could not be found" errors.
+          unset AWS_PROFILE
           tofu plan \
             -var-file="${{ env.TF_VARFILE }}" \
             -var="aws_profile=" \
@@ -276,7 +281,6 @@ jobs:
             exit 1
           fi
         env:
-          AWS_PROFILE: ""
           AWS_DEFAULT_REGION: ${{ env.AWS_REGION }}
 
       # ── Post plan as PR comment ───────────────────────────────────────────────
@@ -338,18 +342,23 @@ jobs:
       - name: Verify AWS credentials before apply
         if: env.RUN_APPLY == 'true' && env.HAVE_CREDS == 'true'
         run: |
+          # Unset AWS_PROFILE so the AWS CLI uses env-var credentials, not a named profile.
+          # Setting AWS_PROFILE="" causes "config profile () could not be found" errors.
+          unset AWS_PROFILE
           echo "=== AWS caller identity ==="
           aws sts get-caller-identity
           echo "=== aws eks get-token test ==="
           aws eks get-token --cluster-name "holmesgpt-${{ matrix.env }}" --region ${{ env.AWS_REGION }} | head -c 200
         env:
-          AWS_PROFILE: ""
           AWS_DEFAULT_REGION: ${{ env.AWS_REGION }}
 
       - name: OpenTofu apply (${{ matrix.env }})
         if: env.RUN_APPLY == 'true' && env.HAVE_CREDS == 'true'
         working-directory: infra
         run: |
+          # Unset AWS_PROFILE so the AWS CLI uses env-var credentials, not a named profile.
+          # Setting AWS_PROFILE="" causes "config profile () could not be found" errors.
+          unset AWS_PROFILE
           tofu apply \
             -var-file="${{ env.TF_VARFILE }}" \
             -var="aws_profile=" \
@@ -362,7 +371,6 @@ jobs:
             -no-color \
             2>&1 | tee /tmp/apply_output.txt
         env:
-          AWS_PROFILE: ""
           AWS_DEFAULT_REGION: ${{ env.AWS_REGION }}
 
       # ── Summary ───────────────────────────────────────────────────────────────
