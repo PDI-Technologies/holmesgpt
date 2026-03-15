@@ -1,6 +1,6 @@
 # Prod environment - placeholder (update with actual values)
 
-aws_profile = "pdi-platform-prod"
+aws_profile = "pdi-platform-production"
 aws_region  = "us-east-1"
 environment = "prod"
 

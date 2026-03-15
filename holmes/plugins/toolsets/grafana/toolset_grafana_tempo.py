@@ -1070,9 +1070,9 @@ class QueryMetricsRange(Tool):
 
 
 class GrafanaTempoToolset(BaseGrafanaTempoToolset):
-    def __init__(self):
+    def __init__(self, name: str = "grafana/tempo"):
         super().__init__(
-            name="grafana/tempo",
+            name=name,
             description="Fetches kubernetes traces from Tempo",
             icon_url="https://grafana.com/static/assets/img/blog/tempo.png",
             docs_url="https://holmesgpt.dev/data-sources/builtin-toolsets/grafanatempo/",

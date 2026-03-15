@@ -82,7 +82,7 @@ FROM python:3.11-slim-bookworm
 
 ENV PYTHONUNBUFFERED=1
 ENV PATH="/venv/bin:$PATH"
-ENV PYTHONPATH=$PYTHONPATH:.:/app/holmes
+ENV PYTHONPATH=".:/app/holmes"
 
 WORKDIR /app
 
@@ -146,5 +146,6 @@ COPY --from=frontend-builder /frontend/dist /app/static
 # Copy frontend server extension (auth + static serving)
 COPY ./infra/frontend/server_frontend.py /app/server_frontend.py
 COPY ./infra/frontend/server_with_frontend.py /app/server_with_frontend.py
+COPY ./infra/frontend/projects.py /app/projects.py
 
 ENTRYPOINT ["python", "server_with_frontend.py"]

@@ -17,10 +17,10 @@ Example:
 
 ```bash
 cat > /tmp/login.json << 'EOF'
-{"username":"admin","password":"HolmesGPT@Dev2026!"}
+{"username":"admin","password":"<HOLMESGPT_ADMIN_PASSWORD>"}
 EOF
 curl -s -c /tmp/cookies.txt -X POST \
-  https://holmesgpt.dev.platform.pditechnologies.com/auth/login \
+  https://<HOLMESGPT_APP_URL>/auth/login \
   -H "Content-Type: application/json" -d @/tmp/login.json
 ```
 
@@ -37,7 +37,7 @@ cat > /tmp/investigate.json << EOF
 EOF
 
 curl -s -b /tmp/cookies.txt \
-  -X POST https://holmesgpt.dev.platform.pditechnologies.com/api/chat \
+  -X POST https://<HOLMESGPT_APP_URL>/api/chat \
   -H "Content-Type: application/json" \
   -d @/tmp/investigate.json \
   | python3 -c "
@@ -83,7 +83,7 @@ cat > /tmp/investigate-structured.json << 'EOF'
 EOF
 
 curl -s -b /tmp/cookies.txt \
-  -X POST https://holmesgpt.dev.platform.pditechnologies.com/api/chat \
+  -X POST https://<HOLMESGPT_APP_URL>/api/chat \
   -H "Content-Type: application/json" \
   -d @/tmp/investigate-structured.json \
   | python3 -c "

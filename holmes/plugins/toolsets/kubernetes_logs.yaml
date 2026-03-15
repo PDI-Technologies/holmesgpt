@@ -7,6 +7,33 @@ toolsets:
       - core
     prerequisites:
       - command: "kubectl version --client"
+    llm_instructions: |
+      Use these tools to read Kubernetes pod logs during incident investigation.
+
+      **Tool selection guide:**
+      - `kubectl_logs` — current logs for a running pod (most common starting point)
+      - `kubectl_previous_logs` — logs from the *previous* container instance (use when a pod has restarted/crashed)
+      - `kubectl_logs_grep` — search for a specific error string or keyword without fetching all logs
+      - `kubectl_logs_all_containers` — when a pod has multiple containers and you are unsure which one is failing
+      - `kubectl_container_logs` / `kubectl_container_previous_logs` — target a specific named container
+
+      **Critical rules:**
+      - Always pass a **pod name**, never a deployment or service name — use `kubectl get pods -n <namespace>` first if you only have a deployment name
+      - Always pass the correct **namespace** — omitting it defaults to `default` which is almost never right
+      - Prefer `kubectl_logs_grep` over fetching full logs when you know the error keyword — it is much faster and avoids token overflow on verbose pods
+
+      **Investigation workflow:**
+      1. If the pod has restarted, start with `kubectl_previous_logs` to see what caused the crash
+      2. For a running pod with errors, use `kubectl_logs_grep` with the error keyword first
+      3. If grep returns nothing useful, fetch full logs with `kubectl_logs`
+      4. For OOMKilled pods, look for memory-related messages and the last few lines before termination
+      5. For CrashLoopBackOff, check both current and previous logs — the crash reason is usually in the last 20 lines
+
+      **Common patterns to search for:**
+      - `grep "Exception\|Error\|FATAL\|panic\|OOM\|killed"` — general errors
+      - `grep "connection refused\|timeout\|ECONNREFUSED"` — connectivity issues
+      - `grep "permission denied\|unauthorized\|403\|401"` — auth/RBAC issues
+      - `grep "out of memory\|OOMKilled\|Cannot allocate"` — memory pressure
 
     # Note: Log tools use transformers with llm_summarize to automatically
     # summarize large log outputs when a fast model is configured. This helps

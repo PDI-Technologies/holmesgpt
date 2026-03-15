@@ -2,16 +2,16 @@
 #
 # Deploy this module into each logistics AWS account (ci, dev, stage, prod, sandbox).
 # It creates a read-only IAM role that the HolmesGPT AWS MCP server can assume
-# from the platform-dev account (717423812395) to investigate incidents.
+# from the platform account to investigate incidents.
 #
 # Usage:
 #   cd infra/logistics-cross-account
 #   terraform init
 #   terraform apply \
-#     -var="aws_profile=pdi-logistics-dev" \
-#     -var="holmes_mcp_role_arn=arn:aws:iam::717423812395:role/holmesgpt-dev-aws-mcp" \
-#     -var="eks_oidc_provider_arn=arn:aws:iam::717423812395:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/067D7295FD86C99EE25FE9F026B73ABE" \
-#     -var="eks_oidc_provider_url=oidc.eks.us-east-1.amazonaws.com/id/067D7295FD86C99EE25FE9F026B73ABE"
+#     -var="aws_profile=<LOGISTICS_AWS_PROFILE>" \
+#     -var="holmes_mcp_role_arn=arn:aws:iam::<PLATFORM_ACCOUNT_ID>:role/holmesgpt-dev-aws-mcp" \
+#     -var="eks_oidc_provider_arn=arn:aws:iam::<PLATFORM_ACCOUNT_ID>:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/<OIDC_ID>" \
+#     -var="eks_oidc_provider_url=oidc.eks.us-east-1.amazonaws.com/id/<OIDC_ID>"
 #
 # Repeat for each account, changing aws_profile each time.
 
@@ -45,7 +45,7 @@ variable "aws_profile" {
 variable "holmes_mcp_role_arn" {
   description = "ARN of the HolmesGPT AWS MCP IRSA role in the platform account (allowed to assume this role)"
   type        = string
-  # Example: arn:aws:iam::717423812395:role/holmesgpt-dev-aws-mcp
+  # Example: arn:aws:iam::<PLATFORM_ACCOUNT_ID>:role/holmesgpt-dev-aws-mcp
 }
 
 variable "eks_oidc_provider_url" {

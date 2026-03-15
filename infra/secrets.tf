@@ -73,3 +73,88 @@ data "aws_secretsmanager_secret_version" "holmes_ui_credentials" {
   secret_id  = aws_secretsmanager_secret.holmes_ui_credentials.id
   depends_on = [aws_secretsmanager_secret_version.holmes_ui_credentials]
 }
+
+# Datadog secret — managed by OpenTofu; values set via variables (default empty)
+resource "aws_secretsmanager_secret" "datadog" {
+  name                    = "${local.cluster_name}/datadog"
+  description             = "Datadog API credentials for HolmesGPT"
+  recovery_window_in_days = var.environment == "dev" ? 0 : 30
+}
+
+resource "aws_secretsmanager_secret_version" "datadog" {
+  secret_id = aws_secretsmanager_secret.datadog.id
+  secret_string = jsonencode({
+    DATADOG_API_KEY = var.datadog_api_key
+    DATADOG_APP_KEY = var.datadog_app_key
+    DATADOG_API_URL = var.datadog_api_url
+  })
+}
+
+data "aws_secretsmanager_secret_version" "datadog" {
+  secret_id  = aws_secretsmanager_secret.datadog.id
+  depends_on = [aws_secretsmanager_secret_version.datadog]
+}
+
+# PagerDuty secret — managed by OpenTofu; values set via variables (default empty)
+resource "aws_secretsmanager_secret" "pagerduty" {
+  name                    = "${local.cluster_name}/pagerduty"
+  description             = "PagerDuty credentials for HolmesGPT"
+  recovery_window_in_days = var.environment == "dev" ? 0 : 30
+}
+
+resource "aws_secretsmanager_secret_version" "pagerduty" {
+  secret_id = aws_secretsmanager_secret.pagerduty.id
+  secret_string = jsonencode({
+    PAGERDUTY_API_KEY        = var.pagerduty_api_key
+    PAGERDUTY_USER_EMAIL     = var.pagerduty_user_email
+    PAGERDUTY_WEBHOOK_SECRET = var.pagerduty_webhook_secret
+  })
+}
+
+data "aws_secretsmanager_secret_version" "pagerduty" {
+  secret_id  = aws_secretsmanager_secret.pagerduty.id
+  depends_on = [aws_secretsmanager_secret_version.pagerduty]
+}
+
+# ADO webhook secret — managed by OpenTofu; values set via variables (default empty)
+resource "aws_secretsmanager_secret" "ado_webhook" {
+  name                    = "${local.cluster_name}/ado-webhook"
+  description             = "Azure DevOps webhook credentials for HolmesGPT"
+  recovery_window_in_days = var.environment == "dev" ? 0 : 30
+}
+
+resource "aws_secretsmanager_secret_version" "ado_webhook" {
+  secret_id = aws_secretsmanager_secret.ado_webhook.id
+  secret_string = jsonencode({
+    ADO_WEBHOOK_USERNAME = var.ado_webhook_username
+    ADO_WEBHOOK_PASSWORD = var.ado_webhook_password
+    ADO_PAT              = var.ado_pat
+    ADO_ORGANIZATION     = var.ado_organization
+  })
+}
+
+data "aws_secretsmanager_secret_version" "ado_webhook" {
+  secret_id  = aws_secretsmanager_secret.ado_webhook.id
+  depends_on = [aws_secretsmanager_secret_version.ado_webhook]
+}
+
+# Salesforce webhook secret — managed by OpenTofu; values set via variables (default empty)
+resource "aws_secretsmanager_secret" "salesforce_webhook" {
+  name                    = "${local.cluster_name}/salesforce-webhook"
+  description             = "Salesforce webhook credentials for HolmesGPT"
+  recovery_window_in_days = var.environment == "dev" ? 0 : 30
+}
+
+resource "aws_secretsmanager_secret_version" "salesforce_webhook" {
+  secret_id = aws_secretsmanager_secret.salesforce_webhook.id
+  secret_string = jsonencode({
+    SALESFORCE_WEBHOOK_TOKEN = var.salesforce_webhook_token
+    SALESFORCE_INSTANCE_URL  = var.salesforce_instance_url
+    SALESFORCE_ACCESS_TOKEN  = var.salesforce_access_token
+  })
+}
+
+data "aws_secretsmanager_secret_version" "salesforce_webhook" {
+  secret_id  = aws_secretsmanager_secret.salesforce_webhook.id
+  depends_on = [aws_secretsmanager_secret_version.salesforce_webhook]
+}

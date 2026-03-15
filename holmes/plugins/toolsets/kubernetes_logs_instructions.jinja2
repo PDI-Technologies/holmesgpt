@@ -1,0 +1,25 @@
+Use the pod logging tool to fetch logs from Kubernetes pods.
+
+**Key parameters:**
+- `filter_regex` — include only lines matching this regex (e.g., `"ERROR|WARN|Exception"`)
+- `exclude_regex` — exclude lines matching this regex (useful to suppress noisy health-check logs)
+- `start_time` — fetch logs since this timestamp (ISO 8601 or relative like `"1h"`, `"30m"`)
+- `previous` — set to `true` to fetch logs from the previous (crashed) container instance
+
+**Best practices:**
+- Always use `filter_regex` to narrow down to errors and warnings first; only fetch full logs if needed
+- For CrashLoopBackOff pods, always set `previous: true` to see the logs from the crashed container
+- Use `start_time` to limit log volume — fetching all logs from a busy pod can overflow the context window
+- For multi-container pods, specify the `container` parameter to target the right container
+- Combine `filter_regex` and `exclude_regex` to isolate signal from noise (e.g., filter for `"ERROR"` and exclude `"healthcheck"`)
+
+**Common investigation patterns:**
+- OOMKilled: check for memory allocation errors, heap dumps, or GC pressure in logs before the crash
+- CrashLoopBackOff: use `previous: true` and filter for `"FATAL|panic|Exception|Error"` to find the crash cause
+- High latency: filter for `"timeout|slow|latency|took [0-9]"` to find slow operations
+- Connection errors: filter for `"connection refused|ECONNREFUSED|dial tcp|connect: no route"` to find network issues
+
+**Limitations:**
+- Only returns logs from pods currently running or recently terminated (within the kubelet's log retention window)
+- Very high-volume pods may require tight time ranges and regex filters to avoid token overflow
+- Logs are fetched from the Kubernetes API — if the pod is evicted or the node is gone, logs may not be available

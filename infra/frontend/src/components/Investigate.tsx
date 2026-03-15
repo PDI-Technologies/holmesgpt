@@ -2,12 +2,12 @@ import { useState, useEffect } from 'react'
 import { useInvestigate } from '../hooks/useInvestigate'
 import MessageBubble from './MessageBubble'
 import ToolCallCard from './ToolCallCard'
-import { api, AwsAccount } from '../lib/api'
+import { api, AwsAccount, type Project } from '../lib/api'
 
 const SOURCES = ['Manual', 'AlertManager', 'PagerDuty', 'Jira', 'OpsGenie', 'Salesforce', 'Azure DevOps', 'AWS CloudWatch']
 
-export default function Investigate() {
-  const { investigations, loading, investigate, clearInvestigations } = useInvestigate()
+export default function Investigate({ projectId, selectedProject }: { projectId?: string | null; selectedProject?: Project | null }) {
+  const { investigations, loading, investigate, clearInvestigations } = useInvestigate(projectId)
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [source, setSource] = useState('Manual')
@@ -42,19 +42,38 @@ export default function Investigate() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-white">
+      <div className="relative flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-white">
         <div>
           <h2 className="text-lg font-bold text-pdi-granite">Investigations</h2>
           <p className="text-xs text-pdi-slate">Submit alerts for AI-powered root cause analysis</p>
         </div>
-        {investigations.length > 0 && (
-          <button
-            onClick={clearInvestigations}
-            className="text-xs text-pdi-slate hover:text-pdi-granite px-3 py-1.5 rounded-lg border border-pdi-cool-gray hover:border-pdi-slate transition-colors"
-          >
-            Clear history
-          </button>
-        )}
+        <div className="flex items-center gap-3">
+          {/* Project scope indicator */}
+          {selectedProject ? (
+            <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-pdi-sky/10 text-pdi-indigo border border-pdi-sky/20">
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+              </svg>
+              {selectedProject.name}
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-pdi-sun/10 text-pdi-sun border border-pdi-sun/20">
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
+              </svg>
+              All instances
+            </span>
+          )}
+          {investigations.length > 0 && (
+            <button
+              onClick={clearInvestigations}
+              className="text-xs text-pdi-slate hover:text-pdi-granite px-3 py-1.5 rounded-lg border border-pdi-cool-gray hover:border-pdi-slate transition-colors"
+            >
+              Clear history
+            </button>
+          )}
+        </div>
+        <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-pdi-sky via-pdi-ocean to-pdi-indigo opacity-60" />
       </div>
 
       <div className="flex-1 overflow-y-auto">
@@ -102,7 +121,7 @@ export default function Investigate() {
                     id="inv-aws-account"
                     value={awsAccount}
                     onChange={(e) => setAwsAccount(e.target.value)}
-                    className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent bg-white"
+                    className="w-full px-3 py-2 border border-pdi-sun/40 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-pdi-sun/50 focus:border-transparent bg-white"
                   >
                     <option value="">All accounts</option>
                     {awsAccounts.map((acc) => (
@@ -117,7 +136,7 @@ export default function Investigate() {
 
             {/* AWS CloudWatch hint */}
             {source === 'AWS CloudWatch' && (
-              <div className="flex items-start gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              <div className="flex items-start gap-2 text-xs text-pdi-sun bg-pdi-sun/10 border border-pdi-sun/20 rounded-lg px-3 py-2">
                 <svg className="w-3.5 h-3.5 mt-0.5 shrink-0" viewBox="0 0 24 24" fill="currentColor">
                   <path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm8.706-1.442c1.146-.573 2.437.463 2.126 1.706l-.709 2.836.042-.02a.75.75 0 01.67 1.34l-.04.022c-1.147.573-2.438-.463-2.127-1.706l.71-2.836-.042.02a.75.75 0 11-.671-1.34l.041-.022zM12 9a.75.75 0 100-1.5.75.75 0 000 1.5z" clipRule="evenodd" />
                 </svg>
@@ -147,7 +166,7 @@ export default function Investigate() {
             <button
               type="submit"
               disabled={loading || !title.trim() || !description.trim()}
-              className="px-5 py-2 bg-pdi-sky text-white rounded-lg font-medium text-sm hover:bg-pdi-sky/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="px-5 py-2 bg-gradient-to-r from-pdi-sky to-pdi-ocean hover:from-pdi-ocean hover:to-pdi-indigo active:scale-[0.98] text-white rounded-lg font-medium text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {loading ? 'Investigating...' : 'Investigate'}
             </button>
@@ -157,7 +176,7 @@ export default function Investigate() {
         {/* Results */}
         <div className="px-6 py-4 space-y-4">
           {investigations.map((inv) => (
-            <div key={inv.id} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <div key={inv.id} className={`bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden ${inv.loading ? 'border-l-4 border-l-pdi-sky' : inv.result ? 'border-l-4 border-l-pdi-grass' : inv.error ? 'border-l-4 border-l-pdi-orange' : ''}`}>
               {/* Investigation header */}
               <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
                 <div>
@@ -191,13 +210,10 @@ export default function Investigate() {
               {/* Investigation body */}
               <div className="px-5 py-4">
                 {inv.loading && (
-                  <div className="flex items-center gap-2 text-pdi-slate text-sm py-4">
-                    <div className="flex gap-1">
-                      <span className="w-2 h-2 bg-pdi-sky rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                      <span className="w-2 h-2 bg-pdi-sky rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                      <span className="w-2 h-2 bg-pdi-sky rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                    </div>
-                    Holmes is investigating this issue...
+                  <div className="space-y-2 py-2">
+                    <div className="h-3 bg-gray-200 rounded animate-pulse w-3/4" />
+                    <div className="h-3 bg-gray-200 rounded animate-pulse w-1/2" />
+                    <div className="h-3 bg-gray-200 rounded animate-pulse w-5/6" />
                   </div>
                 )}
 

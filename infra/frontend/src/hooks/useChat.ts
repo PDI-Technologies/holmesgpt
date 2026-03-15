@@ -48,12 +48,20 @@ function parseSseChunk(chunk: string): Array<{ event: SseEvent; data: unknown }>
   return results
 }
 
-export function useChat() {
+export function useChat(projectId: string | null = null) {
   const [messages, setMessages] = useState<Message[]>([])
   const [loading, setLoading] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
   // Server-managed conversation history (starts with system message — required by backend)
   const serverHistoryRef = useRef<ApiChatMessage[]>([])
+  // Track the last project ID so we can clear history on project switch
+  const lastProjectIdRef = useRef<string | null>(projectId)
+
+  // Clear conversation history when the project changes
+  if (lastProjectIdRef.current !== projectId) {
+    lastProjectIdRef.current = projectId
+    serverHistoryRef.current = []
+  }
 
   const sendMessage = useCallback(
     async (text: string) => {
@@ -97,6 +105,7 @@ export function useChat() {
             stream: true,
             include_tool_calls: true,
             include_tool_call_results: true,
+            ...(projectId ? { project_id: projectId } : {}),
           }),
           signal: controller.signal,
         })
@@ -211,7 +220,7 @@ export function useChat() {
         setLoading(false)
       }
     },
-    [],
+    [projectId],
   )
 
   const clearMessages = useCallback(() => {

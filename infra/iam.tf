@@ -8,12 +8,13 @@ module "holmes_irsa" {
   oidc_providers = {
     main = {
       provider_arn               = module.eks.oidc_provider_arn
-      namespace_service_accounts = ["holmesgpt:holmesgpt"]
+      namespace_service_accounts = ["holmesgpt:holmes-holmes-service-account"]
     }
   }
 
   role_policy_arns = {
-    secrets = aws_iam_policy.holmes_secrets.arn
+    secrets  = aws_iam_policy.holmes_secrets.arn
+    dynamodb = aws_iam_policy.holmes_dynamodb.arn
   }
 }
 
@@ -35,7 +36,34 @@ resource "aws_iam_policy" "holmes_secrets" {
           aws_secretsmanager_secret.mcp_api_keys.arn,
           aws_secretsmanager_secret.holmes_ui_credentials.arn,
           aws_secretsmanager_secret.grafana.arn,
+          aws_secretsmanager_secret.datadog.arn,
+          aws_secretsmanager_secret.pagerduty.arn,
+          aws_secretsmanager_secret.ado_webhook.arn,
+          aws_secretsmanager_secret.salesforce_webhook.arn,
+          "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:${local.cluster_name}/project-*",
         ]
+      }
+    ]
+  })
+}
+
+resource "aws_iam_policy" "holmes_dynamodb" {
+  name        = "${local.cluster_name}-holmes-dynamodb"
+  description = "Allow Holmes to read/write the config DynamoDB table"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "dynamodb:GetItem",
+          "dynamodb:PutItem",
+          "dynamodb:DeleteItem",
+          "dynamodb:Query",
+          "dynamodb:Scan",
+        ]
+        Resource = aws_dynamodb_table.holmes_config.arn
       }
     ]
   })

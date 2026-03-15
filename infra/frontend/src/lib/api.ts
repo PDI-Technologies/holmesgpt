@@ -11,7 +11,11 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   });
 
   if (res.status === 401) {
-    window.location.href = '/login';
+    // Only redirect to login if we're not already on the login page
+    const onLoginPage = window.location.pathname === '/auth/login' || window.location.pathname === '/login';
+    if (!onLoginPage) {
+      window.location.href = '/auth/login';
+    }
     throw new Error('Unauthorized');
   }
 
@@ -53,6 +57,7 @@ export interface InvestigateRequest {
   context: Record<string, string>;
   include_tool_calls?: boolean;
   include_tool_call_results?: boolean;
+  project_id?: string | null;
 }
 
 export interface InvestigateResponse {
@@ -107,6 +112,27 @@ export interface AwsAccountsResponse {
   irsa_role: string;
 }
 
+export interface WebhookInfo {
+  id: string;
+  name: string;
+  url: string;
+  auth_type: string;
+  trigger: string;
+  configured: boolean;
+  vars: Record<string, boolean>;
+  write_back_enabled: boolean;
+  write_back_capable: boolean;
+}
+
+export interface WebhooksResponse {
+  webhooks: WebhookInfo[];
+  webhook_dev_mode: boolean;
+}
+
+export interface AppSettings {
+  webhook_dev_mode: boolean;
+}
+
 export interface LlmInstructionsEntry {
   name: string;
   description: string;
@@ -126,6 +152,79 @@ export interface UpdateLlmInstructionsResponse {
   name: string;
   instructions: string;
   is_overridden: boolean;
+}
+
+export interface ToolsetInstance {
+  type: string;
+  name: string;
+  secret_arn: string | null;
+  /** For MCP toolsets: override the MCP server URL (null = use global URL) */
+  mcp_url?: string | null;
+  /** For aws_api: restrict to these account profile names (null = all configured accounts) */
+  aws_accounts?: string[] | null;
+}
+
+export interface TagFilter {
+  logic: 'AND' | 'OR';
+  tags: Record<string, string>;
+}
+
+export interface Instance {
+  id: string;
+  type: string;
+  name: string;
+  tags: Record<string, string>;
+  secret_arn: string | null;
+  mcp_url?: string | null;
+  aws_accounts?: string[] | null;
+  created_at: string;
+}
+
+export interface InstancesResponse {
+  instances: Instance[];
+}
+
+export interface ProjectPreview {
+  project_id: string;
+  tag_filter: TagFilter | null;
+  resolved_instances: Instance[];
+  total_instances: number;
+  resolved_count: number;
+}
+
+export interface Project {
+  id: string;
+  name: string;
+  description: string;
+  tag_filter: TagFilter | null;
+  created_at: string;
+}
+
+export interface ProjectsResponse {
+  projects: Project[];
+}
+
+export interface ToolCallRecord {
+  tool_name: string;
+  tool_input: Record<string, unknown>;
+  tool_output: string;
+  called_at: string;
+}
+
+export interface Investigation {
+  id: string;
+  started_at: string;
+  finished_at: string;
+  trigger: string;
+  source: string;
+  source_id: string;
+  source_url: string;
+  question: string;
+  answer: string;
+  tool_calls: ToolCallRecord[];
+  project_id: string;
+  status: 'running' | 'completed' | 'failed';
+  error: string;
 }
 
 export const api = {
@@ -169,6 +268,71 @@ export const api = {
     });
   },
 
+  /**
+   * Like investigate() but reads the SSE stream so keepalive comments
+   * prevent the ALB 300s idle-timeout from killing long investigations.
+   * Resolves with the parsed JSON from the final `data:` event.
+   */
+  async investigateStream(data: InvestigateRequest): Promise<InvestigateResponse> {
+    const res = await fetch(`${BASE}/api/investigate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(data),
+    });
+
+    if (res.status === 401) {
+      const onLoginPage = window.location.pathname === '/auth/login' || window.location.pathname === '/login';
+      if (!onLoginPage) window.location.href = '/auth/login';
+      throw new Error('Unauthorized');
+    }
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`${res.status}: ${text}`);
+    }
+
+    if (!res.body) throw new Error('No response body');
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      // Process complete SSE lines
+      const lines = buffer.split('\n');
+      // Keep the last (potentially incomplete) line in the buffer
+      buffer = lines.pop() ?? '';
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        // Skip keepalive comments and blank lines
+        if (!trimmed || trimmed.startsWith(':')) continue;
+
+        if (trimmed.startsWith('data: ')) {
+          const jsonStr = trimmed.slice(6);
+          const parsed = JSON.parse(jsonStr) as { error?: string; analysis?: string; tool_calls?: ToolCall[] };
+          if (parsed.error) throw new Error(parsed.error);
+          return { analysis: parsed.analysis ?? '', tool_calls: parsed.tool_calls };
+        }
+      }
+    }
+
+    // Flush remaining buffer
+    if (buffer.trim().startsWith('data: ')) {
+      const jsonStr = buffer.trim().slice(6);
+      const parsed = JSON.parse(jsonStr) as { error?: string; analysis?: string; tool_calls?: ToolCall[] };
+      if (parsed.error) throw new Error(parsed.error);
+      return { analysis: parsed.analysis ?? '', tool_calls: parsed.tool_calls };
+    }
+
+    throw new Error('Investigation stream ended without a result');
+  },
+
   getModel(): Promise<ModelInfo> {
     return request('/api/model');
   },
@@ -187,6 +351,29 @@ export const api = {
 
   getAwsAccounts(): Promise<AwsAccountsResponse> {
     return request('/api/aws/accounts');
+  },
+
+  getWebhooks(): Promise<WebhooksResponse> {
+    return request('/api/webhooks');
+  },
+
+  updateWebhookSettings(webhookId: string, settings: { write_back_enabled: boolean }): Promise<{ ok: boolean; webhook_id: string; write_back_enabled: boolean }> {
+    return request(`/api/webhooks/${webhookId}/settings`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(settings),
+    });
+  },
+
+  getAppSettings(): Promise<AppSettings> {
+    return request('/api/app-settings');
+  },
+
+  updateAppSettings(settings: Partial<AppSettings>): Promise<AppSettings> {
+    return request('/api/app-settings', {
+      method: 'PUT',
+      body: JSON.stringify(settings),
+    });
   },
 
   getLlmInstructions(): Promise<LlmInstructionsResponse> {
@@ -217,6 +404,81 @@ export const api = {
     return request(`/api/integrations/${encodeURIComponent(name)}/config`, {
       method: 'PUT',
       body: JSON.stringify({ config, enabled }),
+    });
+  },
+
+  getProjects(): Promise<ProjectsResponse> {
+    return request('/api/projects');
+  },
+
+  createProject(data: { name: string; description?: string; tag_filter?: TagFilter | null }): Promise<Project> {
+    return request('/api/projects', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  updateProject(id: string, data: Partial<{ name: string; description: string; tag_filter: TagFilter | null }>): Promise<Project> {
+    return request(`/api/projects/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  deleteProject(id: string): Promise<{ ok: boolean }> {
+    return request(`/api/projects/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
+  },
+
+  previewProject(id: string): Promise<ProjectPreview> {
+    return request(`/api/projects/${encodeURIComponent(id)}/preview`);
+  },
+
+  listInstances(): Promise<Instance[]> {
+    return request<InstancesResponse>('/api/instances').then((r) => r.instances);
+  },
+
+  getInstance(id: string): Promise<Instance> {
+    return request(`/api/instances/${encodeURIComponent(id)}`);
+  },
+
+  createInstance(data: Omit<Instance, 'id' | 'created_at'>): Promise<Instance> {
+    return request('/api/instances', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  updateInstance(id: string, data: Partial<Omit<Instance, 'id' | 'created_at'>>): Promise<Instance> {
+    return request(`/api/instances/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  deleteInstance(id: string): Promise<{ ok: boolean }> {
+    return request(`/api/instances/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
+  },
+
+  getInvestigations(params?: { limit?: number; source?: string; project_id?: string }): Promise<Investigation[]> {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set('limit', String(params.limit));
+    if (params?.source) qs.set('source', params.source);
+    if (params?.project_id) qs.set('project_id', params.project_id);
+    const query = qs.toString();
+    return request(`/api/investigations${query ? `?${query}` : ''}`);
+  },
+
+  getInvestigation(id: string): Promise<Investigation> {
+    return request(`/api/investigations/${encodeURIComponent(id)}`);
+  },
+
+  deleteInvestigation(id: string): Promise<{ ok: boolean }> {
+    return request(`/api/investigations/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
     });
   },
 

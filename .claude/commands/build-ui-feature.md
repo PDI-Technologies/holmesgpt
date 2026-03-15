@@ -91,12 +91,14 @@ Empty state:
 
 ### Adding a new page
 
-1. Add to `App.tsx` type: `export type Page = 'chat' | 'investigate' | 'integrations' | 'settings' | 'newpage'`
+1. Add to `App.tsx` type: `export type Page = 'chat' | 'investigate' | 'integrations' | 'projects' | 'settings' | 'newpage'`
 2. Add nav item to `Layout.tsx` navItems array with SVG path from Heroicons
 3. Create `infra/frontend/src/components/NewPage.tsx`
 4. Add route in `App.tsx`: `{page === 'newpage' && <NewPage />}`
 5. Add API methods to `lib/api.ts` if needed
 6. Create hook in `hooks/useNewPage.ts` if state management is needed
+
+Existing pages for reference: `chat`, `investigate`, `integrations`, `projects` (see `Projects.tsx` + `useProject.ts`).
 
 ### Adding a component
 

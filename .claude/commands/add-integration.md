@@ -38,10 +38,20 @@ Update all five locations (see `add-toolset` skill Step 8):
 4. `docs/data-sources/builtin-toolsets/{name}.md` — Dedicated page
 5. `images/integration_logos/` — Logo image
 
-## Step 5: Deploy
+## Step 5: Register for Project Scoping (Optional)
+
+If the new integration should be available for per-project credential isolation:
+
+**For MCP server integrations** — add the type name to `_MCP_TOOLSET_TYPES` in `infra/frontend/projects.py` and add entries to `_MCP_DEFAULT_URLS`, `_MCP_ICONS`, `_MCP_DESCRIPTIONS`, `_MCP_LLM_INSTRUCTIONS`. Also add to `MCP_TYPES` set in `infra/frontend/src/components/Projects.tsx`.
+
+**For Python toolsets** — add to `PYTHON_TOOLSET_FACTORIES` in `holmes/plugins/toolsets/__init__.py` and add an optional `name` parameter to the toolset's `__init__`. Also add to `TOOLSET_TYPES` array in `Projects.tsx`.
+
+See the `manage-projects` skill for full details on project scoping.
+
+## Step 6: Deploy
 
 Use the `deploy-to-aws` skill or `/ship` command to deploy the changes to the PDI dev environment.
 
-## Step 6: Verify
+## Step 7: Verify
 
 Use `/check-deployment` to confirm the new integration shows as `enabled` with a non-zero tool count.

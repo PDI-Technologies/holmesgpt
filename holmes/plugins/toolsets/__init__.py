@@ -51,12 +51,15 @@ from holmes.plugins.toolsets.kubectl_run.kubectl_run_toolset import KubectlRunTo
 from holmes.plugins.toolsets.kubernetes_logs import KubernetesLogsToolset
 from holmes.plugins.toolsets.mcp.toolset_mcp import RemoteMCPToolset
 from holmes.plugins.toolsets.newrelic.newrelic import NewRelicToolset
+from holmes.plugins.toolsets.outlook.toolset_outlook import OutlookToolset
+from holmes.plugins.toolsets.pagerduty.toolset_pagerduty import PagerDutyToolset
 from holmes.plugins.toolsets.rabbitmq.toolset_rabbitmq import RabbitMQToolset
 from holmes.plugins.toolsets.robusta.robusta import RobustaToolset
 from holmes.plugins.toolsets.runbook.runbook_fetcher import RunbookToolset
 from holmes.plugins.toolsets.servicenow_tables.servicenow_tables import (
     ServiceNowTablesToolset,
 )
+from holmes.plugins.toolsets.teams.toolset_teams import TeamsToolset
 
 THIS_DIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -118,6 +121,9 @@ def load_python_toolsets(
         DatabaseToolset(),
         ElasticsearchDataToolset(),
         ElasticsearchClusterToolset(),
+        PagerDutyToolset(),
+        TeamsToolset(),
+        OutlookToolset(),
     ]
 
     if not DISABLE_PROMETHEUS_TOOLSET:
@@ -215,8 +221,24 @@ def load_toolsets_from_config(
                 config.setdefault("config", {})["extra_headers"] = saved_extra_headers
 
             validated_toolset: Optional[Toolset] = None
+            # Python toolset factory — used for multi-instance support (basename:suffix pattern)
+            if "_python_base" in config:
+                base_name = config.pop("_python_base")
+                instance_name = config.pop("_instance_name", name)
+                factory = PYTHON_TOOLSET_FACTORIES.get(base_name)
+                if factory:
+                    validated_toolset = factory(name=instance_name)
+                    # Apply config overrides if present
+                    if "config" in config and validated_toolset is not None:
+                        validated_toolset.override_with({"config": config["config"]})
+                    if "enabled" in config and validated_toolset is not None:
+                        validated_toolset.enabled = config["enabled"]
+                else:
+                    logging.warning(
+                        "No factory found for Python toolset base '%s'", base_name
+                    )
             # MCP server is not a built-in toolset, so we need to set the type explicitly
-            if toolset_type == ToolsetType.MCP.value:
+            elif toolset_type == ToolsetType.MCP.value:
                 validated_toolset = RemoteMCPToolset(**config, name=name)
             elif toolset_type == ToolsetType.HTTP.value:
                 validated_toolset = HttpToolset(name=name, **config)
@@ -237,3 +259,23 @@ def load_toolsets_from_config(
             logging.warning("Failed to load toolset: %s", name, exc_info=True)
 
     return loaded_toolsets
+
+
+# Registry of Python toolset factories for multi-instance support.
+# When a config key uses the "basename:suffix" pattern (e.g. "grafana/dashboards:logistics"),
+# toolset_manager.py detects the colon, looks up the base name here, and instantiates a new
+# instance of the Python toolset class with the suffixed name.
+PYTHON_TOOLSET_FACTORIES: dict[str, type] = {
+    "grafana/dashboards": GrafanaToolset,
+    "grafana/loki": GrafanaLokiToolset,
+    "grafana/tempo": GrafanaTempoToolset,
+}
+
+# PrometheusToolset is conditionally imported, so add it only when available
+if not DISABLE_PROMETHEUS_TOOLSET:
+    try:
+        from holmes.plugins.toolsets.prometheus.prometheus import PrometheusToolset
+
+        PYTHON_TOOLSET_FACTORIES["prometheus/metrics"] = PrometheusToolset
+    except ImportError:
+        pass

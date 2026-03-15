@@ -265,3 +265,6 @@ class RunbookToolset(Toolset):
             config=config,
             enabled=True,
         )
+        self._load_llm_instructions_from_file(
+            os.path.dirname(__file__), "runbook_instructions.jinja2"
+        )

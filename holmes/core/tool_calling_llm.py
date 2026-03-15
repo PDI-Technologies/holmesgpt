@@ -12,14 +12,12 @@ from openai.types.chat.chat_completion_message_tool_call import (
     ChatCompletionMessageToolCall,
 )
 from pydantic import BaseModel, Field
-from rich.console import Console
 
 from holmes.common.env_vars import (
     LOG_LLM_USAGE_RESPONSE,
     RESET_REPEATED_TOOL_CALL_CHECK_AFTER_COMPACTION,
     TEMPERATURE,
 )
-from holmes.core.issue import Issue
 from holmes.core.llm import LLM
 from holmes.core.llm_usage import extract_usage_from_response
 from holmes.core.models import (
@@ -27,7 +25,6 @@ from holmes.core.models import (
     ToolApprovalDecision,
     ToolCallResult,
 )
-from holmes.core.prompt import generate_user_prompt
 from holmes.core.safeguards import prevent_overly_repeated_tool_call
 from holmes.core.tools import (
     StructuredToolResult,
@@ -50,6 +47,7 @@ from holmes.utils.stream import (
     build_stream_event_token_count,
 )
 from holmes.utils.tags import parse_messages_tags
+
 
 class LLMInterruptedError(Exception):
     """Raised when the user interrupts an in-progress LLM call (e.g. via Escape key)."""

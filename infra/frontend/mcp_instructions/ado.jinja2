@@ -1,0 +1,30 @@
+Use this toolset to investigate issues in Azure DevOps (ADO). It provides access to work items, pull requests, repositories, pipelines, and boards.
+
+**Work item queries (WIQL):**
+- Always prefer WIQL for work item searches — it is faster and more precise than free-text search
+- Example: `SELECT [System.Id], [System.Title], [System.State] FROM WorkItems WHERE [System.TeamProject] = 'MyProject' AND [System.WorkItemType] = 'Bug' AND [System.State] <> 'Closed' ORDER BY [System.ChangedDate] DESC`
+- Filter by area path: `[System.AreaPath] UNDER 'MyProject\\TeamA'`
+- Filter by iteration: `[System.IterationPath] UNDER 'MyProject\\Sprint 42'`
+- Filter by assignee: `[System.AssignedTo] = 'user@company.com'`
+- Filter by tag: `[System.Tags] CONTAINS 'incident'`
+
+**Linking incidents to code changes:**
+- When investigating a production incident, search for recent PRs merged to the affected service's repo around the incident time
+- Look for work items linked to the incident by searching for the incident ID or keywords in work item titles/descriptions
+- Check pipeline run history to identify failed deployments that may have caused the incident
+
+**Pull requests:**
+- Search PRs by repository, branch, status (active/completed/abandoned), and date range
+- Review PR descriptions and linked work items to understand what changed
+- Check PR comments for reviewer concerns that may indicate known issues
+
+**Pipelines:**
+- Query recent pipeline runs to identify failed builds or deployments
+- Check pipeline logs for error messages when a deployment is suspected as the root cause
+- Correlate pipeline completion times with incident start times
+
+**Best practices:**
+- Start with WIQL queries scoped to the relevant project and team
+- When an alert references a service name, search for it in repository names and work item area paths
+- Use the `$top` parameter to limit results — default to 20-50 items to avoid token overflow
+- Always include `ORDER BY [System.ChangedDate] DESC` to get the most recent items first

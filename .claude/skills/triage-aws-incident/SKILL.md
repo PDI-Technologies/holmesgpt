@@ -107,7 +107,7 @@ mcp_servers:
       args: ["awslabs.aws-api-mcp-server@latest"]
       env:
         AWS_REGION: "us-east-1"
-        AWS_PROFILE: "pdi-platform-dev"
+        AWS_PROFILE: "<AWS_PROFILE>"
         READ_OPERATIONS_ONLY: "true"
     llm_instructions: |
       Use this to query any AWS service API.
@@ -296,9 +296,9 @@ For integrating Holmes into your incident response pipeline:
 import requests
 
 response = requests.post(
-    "https://holmesgpt.dev.platform.pditechnologies.com/api/chat",
+    "https://<HOLMESGPT_APP_URL>/api/chat",
     headers={
-        "Authorization": "Bearer HolmesGPT@Dev2026!",
+        "Authorization": "Bearer <HOLMESGPT_ADMIN_PASSWORD>",
         "Content-Type": "application/json"
     },
     json={
@@ -339,8 +339,8 @@ incident = json.loads(report["analysis"])
 import sseclient
 
 response = requests.post(
-    "https://holmesgpt.dev.platform.pditechnologies.com/api/chat",
-    headers={"Authorization": "Bearer HolmesGPT@Dev2026!"},
+    "https://<HOLMESGPT_APP_URL>/api/chat",
+    headers={"Authorization": "Bearer <HOLMESGPT_ADMIN_PASSWORD>"},
     json={"ask": "Why is payment-service down?", "stream": True},
     stream=True
 )
@@ -373,7 +373,7 @@ Add Holmes triage to your deployment pipeline:
       curl -s -X POST \
         -H "Authorization: Bearer $HOLMES_API_KEY" \
         -H "Content-Type: application/json" \
-        https://holmesgpt.dev.platform.pditechnologies.com/api/chat \
+        https://<HOLMESGPT_APP_URL>/api/chat \
         -d "{\"ask\": \"Deployment of payment-service to $NEW_IMAGE failed. \
              Rollout did not complete in 120s. What is wrong?\"}" \
         | jq -r '.analysis'

@@ -17,7 +17,11 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from requests import RequestException
 from requests.exceptions import SSLError  # type: ignore
 
-from holmes.common.env_vars import IS_OPENSHIFT, MAX_GRAPH_POINTS, MAX_GRAPH_POINTS_HARD_LIMIT
+from holmes.common.env_vars import (
+    IS_OPENSHIFT,
+    MAX_GRAPH_POINTS,
+    MAX_GRAPH_POINTS_HARD_LIMIT,
+)
 from holmes.common.openshift import load_openshift_token
 from holmes.core.tools import (
     CallablePrerequisite,
@@ -1782,9 +1786,9 @@ class PrometheusToolset(Toolset):
     ] = [PrometheusConfig, AMPConfig, AzurePrometheusConfig]
     config: Optional[Union[PrometheusConfig, AMPConfig, AzurePrometheusConfig]] = None
 
-    def __init__(self):
+    def __init__(self, name: str = "prometheus/metrics"):
         super().__init__(
-            name="prometheus/metrics",
+            name=name,
             description="Prometheus integration to fetch metadata and execute PromQL queries",
             docs_url="https://holmesgpt.dev/data-sources/builtin-toolsets/prometheus/",
             icon_url="https://upload.wikimedia.org/wikipedia/commons/3/38/Prometheus_software_logo.svg",

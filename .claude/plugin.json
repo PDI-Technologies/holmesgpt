@@ -1,0 +1,9 @@
+{
+  "name": "holmesgpt-pdi",
+  "version": "1.0.0",
+  "description": "PDI HolmesGPT platform engineering skills — deploy, debug, investigate, build UI, manage integrations, write evals",
+  "author": {
+    "name": "PDI Technologies",
+    "email": "support@pditechnologies.com"
+  }
+}

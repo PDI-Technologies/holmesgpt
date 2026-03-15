@@ -1,30 +1,30 @@
-Check the health of the live HolmesGPT deployment at holmesgpt.dev.platform.pditechnologies.com.
+Check the health of the live HolmesGPT deployment.
 
 Run these checks and report a clear status summary:
 
 1. Health endpoints (no auth needed):
 ```bash
-curl -s https://holmesgpt.dev.platform.pditechnologies.com/healthz
-curl -s https://holmesgpt.dev.platform.pditechnologies.com/readyz
+curl -s https://<HOLMESGPT_APP_URL>/healthz
+curl -s https://<HOLMESGPT_APP_URL>/readyz
 ```
 
 2. Pod status:
 ```bash
-aws eks update-kubeconfig --name holmesgpt-dev --profile pdi-platform-dev --region us-east-1 2>/dev/null
+aws eks update-kubeconfig --name holmesgpt-dev --profile <AWS_PROFILE> --region us-east-1 2>/dev/null
 kubectl get pods -n holmesgpt -o wide
 ```
 
 3. Integration status (login first using a file to avoid shell escaping issues):
 ```bash
 cat > /tmp/login.json << 'EOF'
-{"username":"admin","password":"HolmesGPT@Dev2026!"}
+{"username":"admin","password":"<HOLMESGPT_ADMIN_PASSWORD>"}
 EOF
 curl -s -c /tmp/cookies.txt -X POST \
-  https://holmesgpt.dev.platform.pditechnologies.com/auth/login \
+  https://<HOLMESGPT_APP_URL>/auth/login \
   -H "Content-Type: application/json" -d @/tmp/login.json
 
 curl -s -b /tmp/cookies.txt \
-  https://holmesgpt.dev.platform.pditechnologies.com/api/integrations \
+  https://<HOLMESGPT_APP_URL>/api/integrations \
   | tr '{' '\n' | grep '"status"' | grep -v "disabled" \
   | grep -oE '"name":"[^"]+"|"status":"[^"]+"|"error":"[^"]+"' | paste - - -
 ```

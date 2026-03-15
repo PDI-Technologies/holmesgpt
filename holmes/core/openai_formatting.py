@@ -23,7 +23,9 @@ def type_to_open_ai_schema(param_attributes: Any, strict_mode: bool) -> dict[str
     is_nullable_from_schema = False
 
     if isinstance(raw_type, list):
-        non_null_types = [t.strip() if isinstance(t, str) else t for t in raw_type if t != "null"]
+        non_null_types = [
+            t.strip() if isinstance(t, str) else t for t in raw_type if t != "null"
+        ]
         is_nullable_from_schema = "null" in raw_type
         param_type = non_null_types[0] if non_null_types else "string"
     else:
@@ -75,7 +77,9 @@ def type_to_open_ai_schema(param_attributes: Any, strict_mode: bool) -> dict[str
     # Add nullability using anyOf per the OpenAI Structured Outputs spec when strict mode
     # requires optional params to accept null, or when the source schema explicitly marks
     # the field as nullable (e.g., MCP ["string", "null"]).
-    if type_obj and (is_nullable_from_schema or (strict_mode and not param_attributes.required)):
+    if type_obj and (
+        is_nullable_from_schema or (strict_mode and not param_attributes.required)
+    ):
         type_obj = {"anyOf": [type_obj, {"type": "null"}]}
 
     return type_obj

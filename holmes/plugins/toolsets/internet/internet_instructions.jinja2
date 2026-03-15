@@ -1,0 +1,19 @@
+Use the `fetch_webpage` tool to retrieve content from any public URL.
+
+**When to use:**
+- Fetching runbooks linked in alerts or incidents (e.g., a Confluence or GitHub URL in the alert description)
+- Reading vendor status pages (e.g., https://status.aws.amazon.com, https://status.github.com) to check for active outages
+- Retrieving documentation, changelogs, or release notes referenced in an issue
+- Checking public API documentation when you need to understand an endpoint's expected behavior
+- Reading error pages or public dashboards that contain diagnostic information
+
+**How it works:**
+- HTML pages are automatically converted to clean Markdown (navigation, ads, and scripts are stripped)
+- Plain text and JSON responses are returned as-is
+- Timeout is short (5 seconds by default) — if a page is slow, the fetch will fail
+
+**Best practices:**
+- Always fetch a runbook URL before starting an investigation if one is provided in the alert
+- Prefer specific deep-link URLs over homepages (e.g., link directly to the relevant runbook section)
+- If a fetch fails due to timeout or auth, note it and continue the investigation with other tools
+- Do not use this tool for internal/private URLs that require authentication — use the appropriate toolset instead (e.g., Confluence toolset for Confluence pages)

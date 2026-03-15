@@ -7,13 +7,13 @@ ADDITIONAL_CERTIFICATE: str = os.environ.get("CERTIFICATE", "")
 if add_custom_certificate(ADDITIONAL_CERTIFICATE):
     print("added custom certificate")
 
-# DO NOT ADD ANY IMPORTS OR CODE ABOVE THIS LINE
-# IMPORTING ABOVE MIGHT INITIALIZE AN HTTPS CLIENT THAT DOESN'T TRUST THE CUSTOM CERTIFICATE
-import sys
-from holmes.utils.colors import USER_COLOR
 import json
 import logging
 import socket
+
+# DO NOT ADD ANY IMPORTS OR CODE ABOVE THIS LINE
+# IMPORTING ABOVE MIGHT INITIALIZE AN HTTPS CLIENT THAT DOESN'T TRUST THE CUSTOM CERTIFICATE
+import sys
 import uuid
 from pathlib import Path
 from typing import List, Optional
@@ -23,6 +23,13 @@ from rich.markdown import Markdown
 from rich.rule import Rule
 
 from holmes import get_version  # type: ignore
+from holmes.checks.checks_cli import checks_app
+from holmes.common.cli_commons import (
+    opt_api_key,
+    opt_config_file,
+    opt_model,
+    opt_verbose,
+)
 from holmes.config import (
     Config,
     SourceFactory,
@@ -44,20 +51,13 @@ from holmes.plugins.destinations import DestinationType
 from holmes.plugins.interfaces import Issue
 from holmes.plugins.prompts import load_and_render_prompt
 from holmes.plugins.sources.opsgenie import OPSGENIE_TEAM_INTEGRATION_KEY_HELP
+from holmes.toolset_config_tui import run_toolset_config_tui
+from holmes.utils.colors import USER_COLOR
 from holmes.utils.console.logging import init_logging
 from holmes.utils.console.result import handle_result
 from holmes.utils.file_utils import write_json_file
-from holmes.checks.checks_cli import checks_app
-from holmes.common.cli_commons import (
-    opt_api_key,
-    opt_config_file,
-    opt_model,
-    opt_verbose,
-)
-from holmes.toolset_config_tui import run_toolset_config_tui
 
 app = typer.Typer(add_completion=False, pretty_exceptions_show_locals=False)
-
 
 
 investigate_app = typer.Typer(
@@ -434,7 +434,6 @@ def alertmanager(
     model: Optional[str] = opt_model,
     config_file: Optional[Path] = opt_config_file,  # type: ignore
     custom_toolsets: Optional[List[Path]] = opt_custom_toolsets,
-
     max_steps: Optional[int] = opt_max_steps,
     verbose: Optional[List[bool]] = opt_verbose,
     # advanced options for this command
@@ -465,7 +464,9 @@ def alertmanager(
     )
 
     with tool_result_storage() as tool_results_dir:
-        ai = config.create_console_toolcalling_llm(model_name=model, tool_results_dir=tool_results_dir)
+        ai = config.create_console_toolcalling_llm(
+            model_name=model, tool_results_dir=tool_results_dir
+        )
 
         source = config.create_alertmanager_source()
 
@@ -562,7 +563,6 @@ def jira(
     model: Optional[str] = opt_model,
     config_file: Optional[Path] = opt_config_file,  # type: ignore
     custom_toolsets: Optional[List[Path]] = opt_custom_toolsets,
-
     max_steps: Optional[int] = opt_max_steps,
     verbose: Optional[List[bool]] = opt_verbose,
     json_output_file: Optional[str] = opt_json_output_file,
@@ -596,7 +596,9 @@ def jira(
 
     results = []
     with tool_result_storage() as tool_results_dir:
-        ai = config.create_console_toolcalling_llm(model_name=model, tool_results_dir=tool_results_dir)
+        ai = config.create_console_toolcalling_llm(
+            model_name=model, tool_results_dir=tool_results_dir
+        )
         for i, issue in enumerate(issues):
             console.print(
                 f"[bold yellow]Analyzing Jira ticket {i+1}/{len(issues)}: {issue.name}...[/bold yellow]"
@@ -605,7 +607,9 @@ def jira(
 
             console.print(Rule())
             console.print(f"[bold green]AI analysis of {issue.url}[/bold green]")
-            console.print(Markdown(result.result.replace("\n", "\n\n")), style="bold green")  # type: ignore
+            console.print(
+                Markdown(result.result.replace("\n", "\n\n")), style="bold green"
+            )  # type: ignore
             console.print(Rule())
             if update:
                 source.write_back_result(issue.id, result)
@@ -685,7 +689,9 @@ def ticket(
         return
 
     with tool_result_storage() as tool_results_dir:
-        ai = ticket_source.config.create_console_toolcalling_llm(model_name=model, tool_results_dir=tool_results_dir)
+        ai = ticket_source.config.create_console_toolcalling_llm(
+            model_name=model, tool_results_dir=tool_results_dir
+        )
 
         # Render ticket-specific additions
         ticket_additions = load_and_render_prompt(
@@ -758,7 +764,6 @@ def github(
     model: Optional[str] = opt_model,
     config_file: Optional[Path] = opt_config_file,  # type: ignore
     custom_toolsets: Optional[List[Path]] = opt_custom_toolsets,
-
     max_steps: Optional[int] = opt_max_steps,
     verbose: Optional[List[bool]] = opt_verbose,
 ):
@@ -790,7 +795,9 @@ def github(
         f"[bold yellow]Analyzing {len(issues)} GitHub Issues.[/bold yellow] [red]Press Ctrl+C to stop.[/red]"
     )
     with tool_result_storage() as tool_results_dir:
-        ai = config.create_console_toolcalling_llm(model_name=model, tool_results_dir=tool_results_dir)
+        ai = config.create_console_toolcalling_llm(
+            model_name=model, tool_results_dir=tool_results_dir
+        )
         for i, issue in enumerate(issues):
             console.print(
                 f"[bold yellow]Analyzing GitHub issue {i+1}/{len(issues)}: {issue.name}...[/bold yellow]"
@@ -800,7 +807,9 @@ def github(
 
             console.print(Rule())
             console.print(f"[bold green]AI analysis of {issue.url}[/bold green]")
-            console.print(Markdown(result.result.replace("\n", "\n\n")), style="bold green")  # type: ignore
+            console.print(
+                Markdown(result.result.replace("\n", "\n\n")), style="bold green"
+            )  # type: ignore
             console.print(Rule())
             if update:
                 source.write_back_result(issue.id, result)
@@ -833,7 +842,6 @@ def pagerduty(
     model: Optional[str] = opt_model,
     config_file: Optional[Path] = opt_config_file,  # type: ignore
     custom_toolsets: Optional[List[Path]] = opt_custom_toolsets,
-
     max_steps: Optional[int] = opt_max_steps,
     verbose: Optional[List[bool]] = opt_verbose,
     json_output_file: Optional[str] = opt_json_output_file,
@@ -866,7 +874,9 @@ def pagerduty(
 
     results = []
     with tool_result_storage() as tool_results_dir:
-        ai = config.create_console_toolcalling_llm(model_name=model, tool_results_dir=tool_results_dir)
+        ai = config.create_console_toolcalling_llm(
+            model_name=model, tool_results_dir=tool_results_dir
+        )
         for i, issue in enumerate(issues):
             console.print(
                 f"[bold yellow]Analyzing PagerDuty incident {i+1}/{len(issues)}: {issue.name}...[/bold yellow]"
@@ -876,7 +886,9 @@ def pagerduty(
 
             console.print(Rule())
             console.print(f"[bold green]AI analysis of {issue.url}[/bold green]")
-            console.print(Markdown(result.result.replace("\n", "\n\n")), style="bold green")  # type: ignore
+            console.print(
+                Markdown(result.result.replace("\n", "\n\n")), style="bold green"
+            )  # type: ignore
             console.print(Rule())
             if update:
                 source.write_back_result(issue.id, result)
@@ -909,7 +921,6 @@ def opsgenie(
     model: Optional[str] = opt_model,
     config_file: Optional[Path] = opt_config_file,  # type: ignore
     custom_toolsets: Optional[List[Path]] = opt_custom_toolsets,
-
     max_steps: Optional[int] = opt_max_steps,
     verbose: Optional[List[bool]] = opt_verbose,
     documents: Optional[str] = opt_documents,
@@ -940,7 +951,9 @@ def opsgenie(
         f"[bold yellow]Analyzing {len(issues)} OpsGenie alerts.[/bold yellow] [red]Press Ctrl+C to stop.[/red]"
     )
     with tool_result_storage() as tool_results_dir:
-        ai = config.create_console_toolcalling_llm(model_name=model, tool_results_dir=tool_results_dir)
+        ai = config.create_console_toolcalling_llm(
+            model_name=model, tool_results_dir=tool_results_dir
+        )
         for i, issue in enumerate(issues):
             console.print(
                 f"[bold yellow]Analyzing OpsGenie alert {i+1}/{len(issues)}: {issue.name}...[/bold yellow]"
@@ -949,7 +962,9 @@ def opsgenie(
 
             console.print(Rule())
             console.print(f"[bold green]AI analysis of {issue.url}[/bold green]")
-            console.print(Markdown(result.result.replace("\n", "\n\n")), style="bold green")  # type: ignore
+            console.print(
+                Markdown(result.result.replace("\n", "\n\n")), style="bold green"
+            )  # type: ignore
             console.print(Rule())
             if update:
                 source.write_back_result(issue.id, result)

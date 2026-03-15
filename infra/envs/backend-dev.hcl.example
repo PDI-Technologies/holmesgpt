@@ -1,0 +1,29 @@
+# Local development backend config for OpenTofu.
+# Copy to backend-dev.hcl and fill in your values.
+# backend-dev.hcl is gitignored to prevent leaking account IDs.
+#
+# Usage: cd infra && tofu init -backend-config=envs/backend-dev.hcl
+#
+# This file is NOT used in CI — the pdi-iac.yaml workflow injects
+# backend config via -backend-config flags at init time.
+#
+# One-time S3 bucket setup (run once per AWS account):
+#   aws s3api create-bucket \
+#     --bucket holmesgpt-tfstate-<ACCOUNT_ID> \
+#     --region us-east-1 \
+#     --profile <AWS_PROFILE>
+#   aws s3api put-bucket-versioning \
+#     --bucket holmesgpt-tfstate-<ACCOUNT_ID> \
+#     --versioning-configuration Status=Enabled \
+#     --profile <AWS_PROFILE>
+#   aws s3api put-bucket-encryption \
+#     --bucket holmesgpt-tfstate-<ACCOUNT_ID> \
+#     --server-side-encryption-configuration \
+#       '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}' \
+#     --profile <AWS_PROFILE>
+
+bucket  = "holmesgpt-tfstate-<ACCOUNT_ID>"
+key     = "holmesgpt/dev/terraform.tfstate"
+region  = "us-east-1"
+profile = "<AWS_PROFILE>"
+encrypt = true

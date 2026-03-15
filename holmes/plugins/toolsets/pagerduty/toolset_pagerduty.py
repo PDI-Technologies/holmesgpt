@@ -1,0 +1,393 @@
+"""PagerDuty toolset for read-only incident and alert operations."""
+
+import json
+import logging
+from typing import Any, Optional, Tuple, Type
+
+import requests
+from pydantic import Field
+
+from holmes.core.tools import (
+    CallablePrerequisite,
+)
+from holmes.core.tools import ClassVar as ToolsClassVar
+from holmes.core.tools import (
+    StructuredToolResult,
+    StructuredToolResultStatus,
+    Tool,
+    ToolInvokeContext,
+    ToolParameter,
+    Toolset,
+    ToolsetTag,
+)
+from holmes.plugins.toolsets.utils import toolset_name_for_one_liner
+from holmes.utils.pydantic_utils import ToolsetConfig
+
+PAGERDUTY_API_BASE = "https://api.pagerduty.com"
+
+
+class PagerDutyConfig(ToolsetConfig):
+    """Configuration for PagerDuty API access."""
+
+    api_key: str = Field(
+        title="API Key",
+        description="PagerDuty REST API key (v2). Generate one at: Account Settings → API Access Keys",
+        examples=["u+xxxxxxxxxxxxxxxxxxxx"],
+    )
+    default_limit: int = Field(
+        default=25,
+        title="Default Result Limit",
+        description="Maximum number of results to return per query",
+    )
+
+
+class PagerDutyToolset(Toolset):
+    """PagerDuty toolset for querying incidents, services, and on-call schedules."""
+
+    config_classes: ToolsClassVar[list[Type[PagerDutyConfig]]] = [PagerDutyConfig]
+
+    pd_config: Optional[PagerDutyConfig] = None
+
+    def __init__(self):
+        super().__init__(
+            name="pagerduty",
+            description="Read-only access to PagerDuty incidents, services, escalation policies, and on-call schedules",
+            docs_url="https://developer.pagerduty.com/api-reference/",
+            icon_url="https://www.pagerduty.com/wp-content/uploads/2020/02/pd-logo-green.png",
+            prerequisites=[CallablePrerequisite(callable=self.prerequisites_callable)],
+            tools=[
+                ListPagerDutyIncidents(toolset=self),
+                GetPagerDutyIncident(toolset=self),
+                ListPagerDutyServices(toolset=self),
+                ListPagerDutyAlerts(toolset=self),
+                GetPagerDutyOnCall(toolset=self),
+            ],
+            tags=[ToolsetTag.CORE],
+        )
+
+    def prerequisites_callable(self, config: dict[str, Any]) -> Tuple[bool, str]:
+        if not config:
+            return False, "Missing PagerDuty configuration. Provide api_key."
+        try:
+            self.pd_config = PagerDutyConfig(**config)
+            return self._health_check()
+        except Exception as e:
+            return False, f"Failed to configure PagerDuty toolset: {e}"
+
+    def _health_check(self) -> Tuple[bool, str]:
+        try:
+            resp = requests.get(
+                f"{PAGERDUTY_API_BASE}/abilities",
+                headers=self._headers(),
+                timeout=10,
+            )
+            if resp.status_code == 200:
+                return True, ""
+            return (
+                False,
+                f"PagerDuty API returned {resp.status_code}: {resp.text[:200]}",
+            )
+        except Exception as e:
+            return False, f"PagerDuty health check failed: {e}"
+
+    def _headers(self) -> dict:
+        assert self.pd_config is not None
+        return {
+            "Authorization": f"Token token={self.pd_config.api_key}",
+            "Accept": "application/vnd.pagerduty+json;version=2",
+            "Content-Type": "application/json",
+        }
+
+    def get(self, path: str, params: Optional[dict] = None) -> dict:
+        assert self.pd_config is not None
+        url = f"{PAGERDUTY_API_BASE}{path}"
+        resp = requests.get(
+            url, headers=self._headers(), params=params or {}, timeout=30
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+
+class BasePagerDutyTool(Tool):
+    toolset: "PagerDutyToolset"
+
+
+class ListPagerDutyIncidents(BasePagerDutyTool):
+    def __init__(self, toolset: "PagerDutyToolset"):
+        super().__init__(
+            name="list_pagerduty_incidents",
+            description="[pagerduty toolset] List PagerDuty incidents with optional filters",
+            parameters={
+                "statuses": ToolParameter(
+                    description="Comma-separated statuses to filter by: triggered, acknowledged, resolved. Default: triggered,acknowledged",
+                    type="string",
+                    required=False,
+                ),
+                "service_ids": ToolParameter(
+                    description="Comma-separated PagerDuty service IDs to filter by",
+                    type="string",
+                    required=False,
+                ),
+                "urgency": ToolParameter(
+                    description="Filter by urgency: high or low",
+                    type="string",
+                    required=False,
+                ),
+                "limit": ToolParameter(
+                    description="Maximum number of incidents to return (default: 25)",
+                    type="integer",
+                    required=False,
+                ),
+            },
+            toolset=toolset,
+        )
+
+    def get_parameterized_one_liner(self, params: dict) -> str:
+        statuses = params.get("statuses", "triggered,acknowledged")
+        return f"{toolset_name_for_one_liner(self.toolset.name)}: List incidents (status={statuses})"
+
+    def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:
+        if not self.toolset.pd_config:
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR,
+                error="PagerDuty not configured",
+                params=params,
+            )
+        try:
+            statuses_raw = params.get("statuses", "triggered,acknowledged")
+            statuses = [s.strip() for s in statuses_raw.split(",") if s.strip()]
+            query: dict[str, Any] = {
+                "limit": params.get("limit", self.toolset.pd_config.default_limit),
+                "sort_by": "created_at:desc",
+            }
+            for s in statuses:
+                query.setdefault("statuses[]", []).append(s)  # type: ignore[attr-defined]
+
+            if params.get("service_ids"):
+                for sid in params["service_ids"].split(","):
+                    query.setdefault("service_ids[]", []).append(sid.strip())  # type: ignore[attr-defined]
+
+            if params.get("urgency"):
+                query["urgencies[]"] = [params["urgency"]]  # type: ignore[assignment]
+
+            data = self.toolset.get("/incidents", params=query)
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.SUCCESS,
+                data=json.dumps(data, indent=2),
+                params=params,
+                url="https://app.pagerduty.com/incidents",
+            )
+        except Exception as e:
+            logging.exception("Failed to list PagerDuty incidents")
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR, error=str(e), params=params
+            )
+
+
+class GetPagerDutyIncident(BasePagerDutyTool):
+    def __init__(self, toolset: "PagerDutyToolset"):
+        super().__init__(
+            name="get_pagerduty_incident",
+            description="[pagerduty toolset] Get details of a specific PagerDuty incident by ID",
+            parameters={
+                "incident_id": ToolParameter(
+                    description="The PagerDuty incident ID (e.g., P1234AB)",
+                    type="string",
+                    required=True,
+                ),
+            },
+            toolset=toolset,
+        )
+
+    def get_parameterized_one_liner(self, params: dict) -> str:
+        return f"{toolset_name_for_one_liner(self.toolset.name)}: Get incident {params.get('incident_id', '')}"
+
+    def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:
+        if not self.toolset.pd_config:
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR,
+                error="PagerDuty not configured",
+                params=params,
+            )
+        incident_id = params.get("incident_id", "")
+        if not incident_id:
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR,
+                error="incident_id is required",
+                params=params,
+            )
+        try:
+            data = self.toolset.get(f"/incidents/{incident_id}")
+            incident = data.get("incident", data)
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.SUCCESS,
+                data=json.dumps(incident, indent=2),
+                params=params,
+                url=incident.get("html_url", ""),
+            )
+        except requests.HTTPError as e:
+            if e.response is not None and e.response.status_code == 404:
+                return StructuredToolResult(
+                    status=StructuredToolResultStatus.ERROR,
+                    error=f"Incident {incident_id} not found",
+                    params=params,
+                )
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR, error=str(e), params=params
+            )
+        except Exception as e:
+            logging.exception("Failed to get PagerDuty incident")
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR, error=str(e), params=params
+            )
+
+
+class ListPagerDutyServices(BasePagerDutyTool):
+    def __init__(self, toolset: "PagerDutyToolset"):
+        super().__init__(
+            name="list_pagerduty_services",
+            description="[pagerduty toolset] List PagerDuty services (integrations/applications being monitored)",
+            parameters={
+                "query": ToolParameter(
+                    description="Filter services by name substring",
+                    type="string",
+                    required=False,
+                ),
+                "limit": ToolParameter(
+                    description="Maximum number of services to return (default: 25)",
+                    type="integer",
+                    required=False,
+                ),
+            },
+            toolset=toolset,
+        )
+
+    def get_parameterized_one_liner(self, params: dict) -> str:
+        q = params.get("query", "all")
+        return f"{toolset_name_for_one_liner(self.toolset.name)}: List services (query={q})"
+
+    def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:
+        if not self.toolset.pd_config:
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR,
+                error="PagerDuty not configured",
+                params=params,
+            )
+        try:
+            query: dict[str, Any] = {
+                "limit": params.get("limit", self.toolset.pd_config.default_limit)
+            }
+            if params.get("query"):
+                query["query"] = params["query"]
+            data = self.toolset.get("/services", params=query)
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.SUCCESS,
+                data=json.dumps(data, indent=2),
+                params=params,
+                url="https://app.pagerduty.com/services",
+            )
+        except Exception as e:
+            logging.exception("Failed to list PagerDuty services")
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR, error=str(e), params=params
+            )
+
+
+class ListPagerDutyAlerts(BasePagerDutyTool):
+    def __init__(self, toolset: "PagerDutyToolset"):
+        super().__init__(
+            name="list_pagerduty_alerts",
+            description="[pagerduty toolset] List alerts (log entries) for a specific PagerDuty incident",
+            parameters={
+                "incident_id": ToolParameter(
+                    description="The PagerDuty incident ID to list alerts for",
+                    type="string",
+                    required=True,
+                ),
+            },
+            toolset=toolset,
+        )
+
+    def get_parameterized_one_liner(self, params: dict) -> str:
+        return f"{toolset_name_for_one_liner(self.toolset.name)}: List alerts for incident {params.get('incident_id', '')}"
+
+    def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:
+        if not self.toolset.pd_config:
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR,
+                error="PagerDuty not configured",
+                params=params,
+            )
+        incident_id = params.get("incident_id", "")
+        if not incident_id:
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR,
+                error="incident_id is required",
+                params=params,
+            )
+        try:
+            data = self.toolset.get(f"/incidents/{incident_id}/alerts")
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.SUCCESS,
+                data=json.dumps(data, indent=2),
+                params=params,
+            )
+        except Exception as e:
+            logging.exception("Failed to list PagerDuty alerts")
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR, error=str(e), params=params
+            )
+
+
+class GetPagerDutyOnCall(BasePagerDutyTool):
+    def __init__(self, toolset: "PagerDutyToolset"):
+        super().__init__(
+            name="get_pagerduty_oncall",
+            description="[pagerduty toolset] Get who is currently on-call for a given escalation policy or schedule",
+            parameters={
+                "escalation_policy_ids": ToolParameter(
+                    description="Comma-separated escalation policy IDs to filter by",
+                    type="string",
+                    required=False,
+                ),
+                "schedule_ids": ToolParameter(
+                    description="Comma-separated schedule IDs to filter by",
+                    type="string",
+                    required=False,
+                ),
+            },
+            toolset=toolset,
+        )
+
+    def get_parameterized_one_liner(self, params: dict) -> str:
+        return f"{toolset_name_for_one_liner(self.toolset.name)}: Get on-call users"
+
+    def _invoke(self, params: dict, context: ToolInvokeContext) -> StructuredToolResult:
+        if not self.toolset.pd_config:
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR,
+                error="PagerDuty not configured",
+                params=params,
+            )
+        try:
+            query: dict[str, Any] = {}
+            if params.get("escalation_policy_ids"):
+                query["escalation_policy_ids[]"] = [
+                    p.strip() for p in params["escalation_policy_ids"].split(",")
+                ]  # type: ignore[assignment]
+            if params.get("schedule_ids"):
+                query["schedule_ids[]"] = [
+                    s.strip() for s in params["schedule_ids"].split(",")
+                ]  # type: ignore[assignment]
+            data = self.toolset.get("/oncalls", params=query)
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.SUCCESS,
+                data=json.dumps(data, indent=2),
+                params=params,
+                url="https://app.pagerduty.com/on-call-coverage",
+            )
+        except Exception as e:
+            logging.exception("Failed to get PagerDuty on-call")
+            return StructuredToolResult(
+                status=StructuredToolResultStatus.ERROR, error=str(e), params=params
+            )

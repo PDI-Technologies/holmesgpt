@@ -322,9 +322,7 @@ class RemoteMCPTool(Tool):
         if "properties" in schema and isinstance(schema["properties"], dict):
             nested_required = schema.get("required", [])
             properties = {
-                name: cls._parse_tool_parameter(
-                    prop, required=name in nested_required
-                )
+                name: cls._parse_tool_parameter(prop, required=name in nested_required)
                 for name, prop in schema["properties"].items()
             }
 

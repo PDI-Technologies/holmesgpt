@@ -184,15 +184,15 @@ llm_instructions: |
 ```bash
 # Login
 cat > /tmp/login.json << 'EOF'
-{"username":"admin","password":"HolmesGPT@Dev2026!"}
+{"username":"admin","password":"<HOLMESGPT_ADMIN_PASSWORD>"}
 EOF
 curl -s -c /tmp/cookies.txt -X POST \
-  https://holmesgpt.dev.platform.pditechnologies.com/auth/login \
+  https://<HOLMESGPT_APP_URL>/auth/login \
   -H "Content-Type: application/json" -d @/tmp/login.json
 
 # Check integration status
 curl -s -b /tmp/cookies.txt \
-  https://holmesgpt.dev.platform.pditechnologies.com/api/integrations \
+  https://<HOLMESGPT_APP_URL>/api/integrations \
   | tr '{' '\n' | grep '"name":"my-service"'
 ```
 
@@ -293,6 +293,27 @@ The following MCP servers are already configured in the PDI deployment:
 | `salesforce` | `/v1/salesforce-sse/mcp` | 19 (CRM data) |
 
 All use `streamable-http` mode with `x-api-key` header from `MCP_*_API_KEY` env vars.
+
+---
+
+## Per-Project API Key Isolation
+
+MCP servers support per-project API keys via Secrets Manager. When a project has a `secret_arn` set on an MCP instance, `build_project_tool_executor()` in `infra/frontend/projects.py` fetches the secret and instantiates a fresh `RemoteMCPToolset` with that API key — completely isolated from the global MCP toolset.
+
+To make a new MCP server project-scopeable:
+
+1. Add the type name to `_MCP_TOOLSET_TYPES` in `infra/frontend/projects.py`
+2. Add entries to `_MCP_DEFAULT_URLS`, `_MCP_ICONS`, `_MCP_DESCRIPTIONS`, `_MCP_LLM_INSTRUCTIONS`
+3. Add to `MCP_TYPES` set in `infra/frontend/src/components/Projects.tsx`
+
+Secret format for per-project MCP credentials:
+```json
+{"api_key": "your-per-project-api-key"}
+```
+
+Secret naming convention: `holmesgpt-dev/project-<instance-name>`
+
+See the `manage-projects` skill for full details.
 
 ---
 

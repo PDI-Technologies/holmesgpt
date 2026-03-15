@@ -301,6 +301,70 @@ When adding a new toolset or integration, update all of the following pages to k
 - Use environment variables or config files for API keys
 - RBAC permissions are respected for Kubernetes access
 
+## PDI CI Pipeline
+
+The PDI-specific CI pipeline lives in `.github/workflows/`. All workflows use `persist-credentials: false` on every checkout step and move `${{ github.* }}` values into `env:` blocks to prevent script injection.
+
+### Workflows
+
+**`pdi-lint.yaml` — Shift-Left Lint & Security** (runs on every PR and push to `main`/`release/**`)
+
+Six independent jobs run in parallel — no AWS credentials required for any of them:
+
+| Job | Tools | Fails on |
+|---|---|---|
+| `python-lint` | ruff format check, ruff lint, isort, mypy | Any format/lint/type error |
+| `python-sast` | bandit (SAST), pip-audit (CVE scan) | HIGH severity bandit finding; any unfixed CVE |
+| `frontend-lint` | tsc --noEmit, ESLint, npm audit | TypeScript error; ESLint warning; HIGH/CRITICAL prod CVE |
+| `iac-scan` | Checkov on `infra/*.tf` | Soft-fail on first run (see note below) |
+| `secrets-scan` | Gitleaks (full git history) | Any detected secret |
+| `container-scan` | Trivy vuln scan + secret scan on built image | CRITICAL/HIGH unfixed CVE; any secret in image |
+
+**`pdi-build.yaml` — Docker Build** (runs on every PR)
+- Same-repo PRs: builds and pushes to dev ECR tagged by commit SHA
+- Fork PRs: build only (no push — no AWS credentials available)
+- Posts image tag as a PR comment for easy manual testing
+
+**`pdi-iac.yaml` — OpenTofu IaC** (runs on `infra/**` changes, excluding `infra/frontend/**`)
+- PR: `tofu plan` for both dev and prod, posts plan diff as PR comment
+- Push to `main`: `tofu apply` for dev only
+- Push to `release/**`: `tofu apply` for prod only
+- Uses S3 backend for remote state; never cancels mid-flight (`cancel-in-progress: false`)
+
+### Frontend ESLint Setup
+
+The frontend uses ESLint v9 flat config (`infra/frontend/eslint.config.js`). After any change to `infra/frontend/package.json` (adding/removing packages), run:
+
+```bash
+cd infra/frontend
+npm install   # regenerates package-lock.json for npm ci in CI
+```
+
+ESLint packages required (already in `devDependencies`):
+- `@eslint/js`, `@typescript-eslint/eslint-plugin`, `@typescript-eslint/parser`
+- `eslint-plugin-react-hooks`, `eslint-plugin-react-refresh`
+
+Rules: TypeScript recommended + React Hooks rules enforced as errors; `@typescript-eslint/no-explicit-any` is a warning (not error) to avoid blocking the existing codebase.
+
+### Checkov Baseline Note
+
+The `iac-scan` job runs with `--soft-fail` on first run so it reports findings without blocking PRs. Once the Checkov baseline is triaged:
+1. Review findings in the workflow step summary
+2. Add `--skip-check CKV_AWS_XXX` for accepted risks with a comment explaining why
+3. Remove `--soft-fail` to enforce the policy going forward
+
+### Trivy Container Scan
+
+Trivy scans the locally-built Docker image (no ECR push needed). It runs two passes:
+- **Vulnerability scan**: CRITICAL and HIGH severity, `ignore-unfixed: true` (only fails on CVEs with available fixes)
+- **Secret scan**: Detects hardcoded credentials, API keys, tokens in the image filesystem
+
+Reports are uploaded as workflow artifacts (`trivy-reports`) with 30-day retention.
+
+### pip-audit CVE Scan
+
+pip-audit exports `requirements.txt` from `poetry.lock` (via `poetry export --without-hashes`) and scans for known CVEs. To suppress a known false-positive or accepted risk, add `--ignore-vuln PYSEC-XXXX` to the pip-audit command in `pdi-lint.yaml` with a comment explaining the decision.
+
 ## Eval Tests (LLM Evaluations)
 
 For creating, running, and debugging LLM eval tests, use the `/create-eval` skill. It contains the complete workflow, test_case.yaml field reference, anti-hallucination patterns, infrastructure setup guides, and CLI reference.

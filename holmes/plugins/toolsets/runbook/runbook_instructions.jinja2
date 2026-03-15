@@ -1,0 +1,21 @@
+Use the `fetch_runbook` tool to retrieve the content of a runbook before starting an investigation.
+
+**When to use:**
+- ALWAYS fetch a runbook at the start of an investigation if one is referenced in the alert, incident, or user prompt
+- When the alert description contains a runbook link or runbook ID
+- When the user asks you to "follow the runbook" or "use the runbook for X"
+
+**How to use:**
+- Pass the runbook ID (a UUID or a `.md` filename) to `fetch_runbook`
+- The tool returns the full runbook content wrapped in instructions on how to execute it
+- After fetching, follow the runbook steps by calling the appropriate tools yourself — the runbook content is directions, not actual results
+
+**After fetching a runbook:**
+- Execute each step in the runbook using the available tools
+- Report which steps you completed (✅) and which you could not complete (❌) with reasons
+- Start your response with: "I found a runbook named [name] and used it to troubleshoot:"
+
+**Important:**
+- The runbook content describes what to investigate — you must still call tools to gather actual data
+- If a step requires a tool that is not enabled, note it and continue with the remaining steps
+- Do not skip runbook steps without attempting them first

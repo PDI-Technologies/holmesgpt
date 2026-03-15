@@ -13,20 +13,22 @@ Design and build features for the HolmesGPT custom React frontend.
 
 ```
 infra/frontend/src/
-├── App.tsx                    # Root: auth check, page routing (chat/investigate/integrations/settings)
+├── App.tsx                    # Root: auth check, page routing (chat/investigate/integrations/settings/projects)
 ├── main.tsx                   # React entry point
 ├── lib/
 │   └── api.ts                 # All API calls (fetch wrapper, typed interfaces)
 ├── hooks/
-│   ├── useChat.ts             # Chat state: messages, sendMessage, clearMessages
-│   └── useInvestigate.ts      # Investigation state: submit, results, history
+│   ├── useChat.ts             # Chat state: messages, sendMessage, clearMessages, projectId scoping
+│   ├── useInvestigate.ts      # Investigation state: submit, results, history
+│   └── useProject.ts          # Project selection: loads /api/projects, persists to localStorage
 └── components/
-    ├── Layout.tsx             # Sidebar nav (pdi-indigo bg), main content area
+    ├── Layout.tsx             # Sidebar nav (pdi-indigo bg), project selector dropdown, main content area
     ├── LoginPage.tsx          # Session cookie login form
-    ├── Chat.tsx               # Free-form chat with Holmes
+    ├── Chat.tsx               # Free-form chat with Holmes (accepts projectId prop)
     ├── Investigate.tsx        # Structured alert investigation form + results
     ├── Integrations.tsx       # Toolset/MCP status grid with toggle/config
     ├── Settings.tsx           # Model info + health checks
+    ├── Projects.tsx           # Project CRUD: list cards, create/edit modal with instance editor
     ├── MessageBubble.tsx      # Chat bubble with ReactMarkdown + syntax highlighting
     └── ToolCallCard.tsx       # Collapsible tool call result (dark code block)
 ```
@@ -35,10 +37,11 @@ infra/frontend/src/
 
 | Page | Route | Purpose |
 |---|---|---|
-| Chat | `chat` | Free-form Q&A with Holmes, conversation history |
+| Chat | `chat` | Free-form Q&A with Holmes, conversation history, scoped to selected project |
 | Investigations | `investigate` | Submit alerts for root cause analysis |
 | Integrations | `integrations` | View/toggle/configure toolsets and MCP servers |
 | Settings | `settings` | Model info, health/readiness status |
+| Projects | `projects` | Create/edit/delete projects; group integration instances per team/environment |
 
 ---
 
@@ -494,24 +497,77 @@ function IncidentReportCard({ report }: { report: IncidentReport }) {
 
 1. Add the page type to `App.tsx`:
    ```typescript
-   export type Page = 'chat' | 'investigate' | 'integrations' | 'settings' | 'alerts'
+   export type Page = 'chat' | 'investigate' | 'integrations' | 'settings' | 'projects' | 'newpage'
    ```
 
 2. Add nav item to `Layout.tsx`:
    ```typescript
-   { page: 'alerts', label: 'Alerts', icon: 'M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z' },
+   { page: 'newpage', label: 'New Page', icon: 'M12 9v3.75m-9.303 3.376c...' },
    ```
 
-3. Create `infra/frontend/src/components/Alerts.tsx`
+3. Create `infra/frontend/src/components/NewPage.tsx`
 
 4. Add the route in `App.tsx`:
    ```tsx
-   {page === 'alerts' && <Alerts />}
+   {page === 'newpage' && <NewPage />}
    ```
 
 5. Add any new API methods to `lib/api.ts`
 
-6. Create a hook in `hooks/useAlerts.ts` following the `useInvestigate.ts` pattern
+6. Create a hook in `hooks/useNewPage.ts` following the `useProject.ts` pattern
+
+---
+
+## Projects Feature Reference
+
+The Projects feature (added 2026-03) lets users group integration instances per team/environment and scope chat to only those tools.
+
+### Key files
+
+| File | Purpose |
+|---|---|
+| `infra/frontend/src/components/Projects.tsx` | CRUD UI: list cards, create/edit modal, `InstanceEditor` component |
+| `infra/frontend/src/hooks/useProject.ts` | Loads `/api/projects`, persists `selectedProjectId` to `localStorage` |
+| `infra/frontend/src/components/Layout.tsx` | Project selector `<select>` between logo and nav |
+| `infra/frontend/src/components/Chat.tsx` | Accepts `projectId` prop, passes to `useChat` |
+| `infra/frontend/src/hooks/useChat.ts` | Sends `project_id` in request body; clears history on project switch |
+| `infra/frontend/src/lib/api.ts` | `ToolsetInstance`, `Project`, `ProjectsResponse` types; CRUD methods |
+| `infra/frontend/projects.py` | Backend: DynamoDB-backed `ProjectsStore`, `build_project_tool_executor` |
+
+### ToolsetInstance model
+
+```typescript
+interface ToolsetInstance {
+  type: string          // 'grafana/dashboards' | 'aws_api' | 'ado' | 'atlassian' | 'salesforce' | ...
+  name: string          // unique instance name within the project
+  secret_arn: string | null   // Secrets Manager ARN for per-project credentials
+  mcp_url?: string | null     // MCP server URL override (null = use global)
+  aws_accounts?: string[] | null  // restrict AWS toolset to these account profile names
+}
+```
+
+### Instance editor behaviour per type
+
+| Type | Fields shown | Backend behaviour |
+|---|---|---|
+| `grafana/*`, `prometheus/metrics` | Secret ARN | Fetches creds from Secrets Manager, instantiates Python toolset |
+| `ado`, `atlassian`, `salesforce` | Secret ARN (API key), MCP URL override | Instantiates `RemoteMCPToolset` with per-project API key |
+| `aws_api` | AWS account checkboxes (from `/api/aws/accounts`) | Copies global AWS toolset, overrides `llm_instructions` to restrict `--profile` values |
+| Any (no secret_arn) | — | Reuses global toolset directly |
+
+### useProject hook
+
+```typescript
+const { projects, selectedProjectId, selectedProject, selectProject, reloadProjects, loading } = useProject()
+```
+
+- Loads from `/api/projects` on mount
+- Persists `selectedProjectId` to `localStorage` key `holmesgpt_selected_project`
+- `selectProject(id | null)` — null means "All integrations" (no scoping)
+
+### Conversation history scoping
+
+`useChat` clears `serverHistoryRef` when `projectId` changes so the LLM doesn't carry context from a different project's conversation.
 
 ---
 

@@ -1,16 +1,16 @@
 import json
 import logging
 import os
-import boto3
 import threading
 import time
 from abc import abstractmethod
-from botocore.exceptions import BotoCoreError
 from math import floor
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Type, Union
 
+import boto3
 import litellm
 import sentry_sdk
+from botocore.exceptions import BotoCoreError
 from litellm.litellm_core_utils.streaming_handler import CustomStreamWrapper
 from litellm.types.utils import ModelResponse, TextCompletionResponse
 from pydantic import BaseModel, ConfigDict, SecretStr
@@ -227,8 +227,11 @@ class DefaultLLM(LLM):
             if (
                 os.environ.get("AWS_PROFILE")
                 or os.environ.get("AWS_BEARER_TOKEN_BEDROCK")
-                or (os.environ.get("AWS_ROLE_ARN") and os.environ.get("AWS_WEB_IDENTITY_TOKEN_FILE"))
-                ):
+                or (
+                    os.environ.get("AWS_ROLE_ARN")
+                    and os.environ.get("AWS_WEB_IDENTITY_TOKEN_FILE")
+                )
+            ):
                 model_requirements = {"keys_in_environment": True, "missing_keys": []}
             elif args.get("aws_access_key_id") and args.get("aws_secret_access_key"):
                 return  # break fast.
@@ -239,7 +242,10 @@ class DefaultLLM(LLM):
                     session = boto3.Session()
                     credentials = session.get_credentials()
                     if credentials is not None:
-                        model_requirements = {"keys_in_environment": True, "missing_keys": []}
+                        model_requirements = {
+                            "keys_in_environment": True,
+                            "missing_keys": [],
+                        }
                     else:
                         model_requirements = litellm.validate_environment(
                             model=model, api_key=api_key, api_base=api_base

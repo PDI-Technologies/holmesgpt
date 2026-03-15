@@ -23,21 +23,21 @@ Internet -> Route53 -> ALB (HTTPS, ACM cert) -> EKS Cluster -> Holmes Pod(s)
 | ECR | Private repo `holmesgpt` |
 | IAM (IRSA) | Service account role for Secrets Manager read |
 | Secrets Manager | ANTHROPIC_API_KEY, ANTHROPIC_API_BASE |
-| Route53 | holmesgpt.{env}.platform.pditechnologies.com |
+| Route53 | holmesgpt.{env}.<YOUR_DOMAIN> |
 | ACM | Existing wildcard certs |
 | ALB | AWS Load Balancer Controller, HTTPS termination |
 
 ## Environment Configuration
 
-### Dev (pdi-platform-dev, account 717423812395)
+### Dev (<AWS_PROFILE>, account <AWS_ACCOUNT_ID>)
 
-- VPC: `vpc-03d8d8f4fb1f915c5` (platform_dev_us-east-1_vpc, 10.167.0.0/21)
-- Private subnets (nodes): services-01-a/b
-- Public subnets (ALB): ext01-a/b
-- Route53 zone: dev.platform.pditechnologies.com (Z09344573OY2RCX1Q76DP)
-- ACM: *.dev.platform.pditechnologies.com (c99bb8a8-6506-487e-a628-5a084c9ef69c)
+- VPC: `<VPC_ID>` (<VPC_NAME>, <VPC_CIDR>)
+- Private subnets (nodes): <PRIVATE_SUBNET_NAMES>
+- Public subnets (ALB): <PUBLIC_SUBNET_NAMES>
+- Route53 zone: <DEV_ZONE_DOMAIN> (<ROUTE53_ZONE_ID>)
+- ACM: *.<DEV_ZONE_DOMAIN> (<ACM_CERT_ID>)
 - Node group: 1x t3.medium (min 1, max 2)
-- LLM: PDI AI Gateway (ai-gateway.platform.pditechnologies.com)
+- LLM: <LLM_GATEWAY_URL>
 
 ### Prod (placeholder, to be filled)
 
@@ -46,7 +46,7 @@ Internet -> Route53 -> ALB (HTTPS, ACM cert) -> EKS Cluster -> Holmes Pod(s)
 - Route53 zone: TBD
 - ACM: TBD
 - Node group: 2x t3.medium (min 2, max 5)
-- LLM: PDI AI Gateway
+- LLM: <LLM_GATEWAY_URL>
 
 ## File Structure
 

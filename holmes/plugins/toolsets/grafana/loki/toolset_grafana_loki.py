@@ -92,9 +92,9 @@ class GrafanaLokiToolset(BaseGrafanaToolset):
             return False, f"Unable to connect to Loki.\n{str(e)}"
         return True, ""
 
-    def __init__(self):
+    def __init__(self, name: str = "grafana/loki"):
         super().__init__(
-            name="grafana/loki",
+            name=name,
             description="Runs loki log queries using Grafana Loki or Loki directly.",
             icon_url="https://grafana.com/media/docs/loki/logo-grafana-loki.png",
             docs_url="https://holmesgpt.dev/data-sources/builtin-toolsets/grafanaloki/",

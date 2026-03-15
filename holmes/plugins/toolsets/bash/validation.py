@@ -145,7 +145,9 @@ def check_hardcoded_blocks(segment: str) -> Optional[str]:
     return None
 
 
-def check_blocked_in_raw_command(command: str, blocked_list: List[str]) -> Optional[str]:
+def check_blocked_in_raw_command(
+    command: str, blocked_list: List[str]
+) -> Optional[str]:
     """
     Check for blocked patterns anywhere in a raw command string using word boundaries.
 

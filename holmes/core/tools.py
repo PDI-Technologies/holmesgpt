@@ -27,7 +27,6 @@ from typing import (
 )
 
 from jinja2 import Template
-from requests.structures import CaseInsensitiveDict
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -36,6 +35,7 @@ from pydantic import (
     PrivateAttr,
     model_validator,
 )
+from requests.structures import CaseInsensitiveDict
 from rich.console import Console
 from rich.table import Table
 
@@ -116,7 +116,9 @@ class StructuredToolResult(BaseModel):
                 return self.data.model_dump_json(indent=None if compact else 2), True
             else:
                 if compact:
-                    return json.dumps(self.data, separators=(",", ":"), ensure_ascii=False), True
+                    return json.dumps(
+                        self.data, separators=(",", ":"), ensure_ascii=False
+                    ), True
                 else:
                     return json.dumps(self.data, indent=2, ensure_ascii=False), True
         except Exception:
@@ -656,7 +658,14 @@ class ToolsetEnvironmentPrerequisite(BaseModel):
     env: List[str] = []  # optional
 
 
-def _prereq_priority(prereq: Union[StaticPrerequisite, ToolsetCommandPrerequisite, ToolsetEnvironmentPrerequisite, CallablePrerequisite]) -> int:
+def _prereq_priority(
+    prereq: Union[
+        StaticPrerequisite,
+        ToolsetCommandPrerequisite,
+        ToolsetEnvironmentPrerequisite,
+        CallablePrerequisite,
+    ],
+) -> int:
     """Priority ordering for prerequisite checks. Lower number = higher priority.
 
     Static checks and env vars are fast config-validity checks (0-1).

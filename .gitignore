@@ -182,6 +182,8 @@ infra/**/*.tfstate
 infra/**/*.tfstate.backup
 infra/**/*.tfplan
 infra/envs/*.auto.tfvars
+# Backend configs contain real AWS profile names — gitignored, use *.example as template
+infra/envs/backend-*.hcl
 
 # Frontend build artifacts
 infra/frontend/node_modules/

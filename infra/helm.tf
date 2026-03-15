@@ -1,8 +1,12 @@
-# Locals to decode Secrets Manager values for use in this file
+# Locals to decode Secrets Manager values for use in this file.
+# Only read back secrets that already existed before this PR (mcp_keys, ui_creds, grafana).
+# New secrets (datadog, pagerduty, ado_webhook, salesforce_webhook) are referenced directly
+# from variables to avoid data-source read failures on first apply when the secrets don't
+# exist in AWS yet.
 locals {
-  mcp_keys  = jsondecode(data.aws_secretsmanager_secret_version.mcp_api_keys.secret_string)
-  ui_creds  = jsondecode(data.aws_secretsmanager_secret_version.holmes_ui_credentials.secret_string)
-  grafana   = jsondecode(data.aws_secretsmanager_secret_version.grafana.secret_string)
+  mcp_keys          = jsondecode(data.aws_secretsmanager_secret_version.mcp_api_keys.secret_string)
+  ui_creds          = jsondecode(data.aws_secretsmanager_secret_version.holmes_ui_credentials.secret_string)
+  grafana           = jsondecode(data.aws_secretsmanager_secret_version.grafana.secret_string)
 }
 
 # Kubernetes namespace for Holmes
@@ -31,6 +35,19 @@ resource "kubernetes_secret" "holmes_api_keys" {
     MCP_SALESFORCE_API_KEY = local.mcp_keys["MCP_SALESFORCE_API_KEY"]
     GRAFANA_API_KEY        = local.grafana["GRAFANA_API_KEY"]
     GRAFANA_URL            = local.grafana["GRAFANA_URL"]
+    DATADOG_API_KEY        = var.datadog_api_key
+    DATADOG_APP_KEY        = var.datadog_app_key
+    DATADOG_API_URL        = var.datadog_api_url
+    PAGERDUTY_API_KEY        = var.pagerduty_api_key
+    PAGERDUTY_USER_EMAIL     = var.pagerduty_user_email
+    PAGERDUTY_WEBHOOK_SECRET = var.pagerduty_webhook_secret
+    ADO_WEBHOOK_USERNAME     = var.ado_webhook_username
+    ADO_WEBHOOK_PASSWORD     = var.ado_webhook_password
+    ADO_PAT                  = var.ado_pat
+    ADO_ORGANIZATION         = var.ado_organization
+    SALESFORCE_WEBHOOK_TOKEN = var.salesforce_webhook_token
+    SALESFORCE_INSTANCE_URL  = var.salesforce_instance_url
+    SALESFORCE_ACCESS_TOKEN  = var.salesforce_access_token
   }
 
   type = "Opaque"
@@ -145,6 +162,123 @@ resource "helm_release" "holmes" {
           }
         },
         {
+          name = "DATADOG_API_KEY"
+          valueFrom = {
+            secretKeyRef = {
+              name = kubernetes_secret.holmes_api_keys.metadata[0].name
+              key  = "DATADOG_API_KEY"
+            }
+          }
+        },
+        {
+          name = "DATADOG_APP_KEY"
+          valueFrom = {
+            secretKeyRef = {
+              name = kubernetes_secret.holmes_api_keys.metadata[0].name
+              key  = "DATADOG_APP_KEY"
+            }
+          }
+        },
+        {
+          name = "DATADOG_API_URL"
+          valueFrom = {
+            secretKeyRef = {
+              name = kubernetes_secret.holmes_api_keys.metadata[0].name
+              key  = "DATADOG_API_URL"
+            }
+          }
+        },
+        {
+          name = "PAGERDUTY_API_KEY"
+          valueFrom = {
+            secretKeyRef = {
+              name = kubernetes_secret.holmes_api_keys.metadata[0].name
+              key  = "PAGERDUTY_API_KEY"
+            }
+          }
+        },
+        {
+          name = "PAGERDUTY_USER_EMAIL"
+          valueFrom = {
+            secretKeyRef = {
+              name = kubernetes_secret.holmes_api_keys.metadata[0].name
+              key  = "PAGERDUTY_USER_EMAIL"
+            }
+          }
+        },
+        {
+          name = "PAGERDUTY_WEBHOOK_SECRET"
+          valueFrom = {
+            secretKeyRef = {
+              name = kubernetes_secret.holmes_api_keys.metadata[0].name
+              key  = "PAGERDUTY_WEBHOOK_SECRET"
+            }
+          }
+        },
+        {
+          name = "ADO_WEBHOOK_USERNAME"
+          valueFrom = {
+            secretKeyRef = {
+              name = kubernetes_secret.holmes_api_keys.metadata[0].name
+              key  = "ADO_WEBHOOK_USERNAME"
+            }
+          }
+        },
+        {
+          name = "ADO_WEBHOOK_PASSWORD"
+          valueFrom = {
+            secretKeyRef = {
+              name = kubernetes_secret.holmes_api_keys.metadata[0].name
+              key  = "ADO_WEBHOOK_PASSWORD"
+            }
+          }
+        },
+        {
+          name = "ADO_PAT"
+          valueFrom = {
+            secretKeyRef = {
+              name = kubernetes_secret.holmes_api_keys.metadata[0].name
+              key  = "ADO_PAT"
+            }
+          }
+        },
+        {
+          name = "ADO_ORGANIZATION"
+          valueFrom = {
+            secretKeyRef = {
+              name = kubernetes_secret.holmes_api_keys.metadata[0].name
+              key  = "ADO_ORGANIZATION"
+            }
+          }
+        },
+        {
+          name = "SALESFORCE_WEBHOOK_TOKEN"
+          valueFrom = {
+            secretKeyRef = {
+              name = kubernetes_secret.holmes_api_keys.metadata[0].name
+              key  = "SALESFORCE_WEBHOOK_TOKEN"
+            }
+          }
+        },
+        {
+          name = "SALESFORCE_INSTANCE_URL"
+          valueFrom = {
+            secretKeyRef = {
+              name = kubernetes_secret.holmes_api_keys.metadata[0].name
+              key  = "SALESFORCE_INSTANCE_URL"
+            }
+          }
+        },
+        {
+          name = "SALESFORCE_ACCESS_TOKEN"
+          valueFrom = {
+            secretKeyRef = {
+              name = kubernetes_secret.holmes_api_keys.metadata[0].name
+              key  = "SALESFORCE_ACCESS_TOKEN"
+            }
+          }
+        },
+        {
           name  = "AWS_MCP_ACCOUNTS"
           value = jsonencode([
             for name, cfg in var.logistics_accounts : {
@@ -158,6 +292,10 @@ resource "helm_release" "holmes" {
         {
           name  = "AWS_MCP_IRSA_ROLE"
           value = var.aws_mcp_enabled ? module.aws_mcp_irsa[0].iam_role_arn : ""
+        },
+        {
+          name  = "HOLMES_DYNAMODB_TABLE"
+          value = aws_dynamodb_table.holmes_config.name
         }
       ]
 
@@ -180,6 +318,54 @@ resource "helm_release" "holmes" {
           config  = {
             api_url = "{{ env.GRAFANA_URL }}"
             api_key = "{{ env.GRAFANA_API_KEY }}"
+          }
+        }
+        "datadog/metrics" = {
+          enabled = true
+          config  = {
+            api_url = "{{ env.DATADOG_API_URL }}"
+            api_key = "{{ env.DATADOG_API_KEY }}"
+            app_key = "{{ env.DATADOG_APP_KEY }}"
+          }
+        }
+        "datadog/logs" = {
+          enabled = true
+          config  = {
+            api_url = "{{ env.DATADOG_API_URL }}"
+            api_key = "{{ env.DATADOG_API_KEY }}"
+            app_key = "{{ env.DATADOG_APP_KEY }}"
+          }
+        }
+        "datadog/monitors" = {
+          enabled = true
+          config  = {
+            api_url = "{{ env.DATADOG_API_URL }}"
+            api_key = "{{ env.DATADOG_API_KEY }}"
+            app_key = "{{ env.DATADOG_APP_KEY }}"
+          }
+        }
+        "datadog/events" = {
+          enabled = true
+          config  = {
+            api_url = "{{ env.DATADOG_API_URL }}"
+            api_key = "{{ env.DATADOG_API_KEY }}"
+            app_key = "{{ env.DATADOG_APP_KEY }}"
+          }
+        }
+        "datadog/general" = {
+          enabled = true
+          config  = {
+            api_url = "{{ env.DATADOG_API_URL }}"
+            api_key = "{{ env.DATADOG_API_KEY }}"
+            app_key = "{{ env.DATADOG_APP_KEY }}"
+          }
+        }
+        "datadog/traces" = {
+          enabled = true
+          config  = {
+            api_url = "{{ env.DATADOG_API_URL }}"
+            api_key = "{{ env.DATADOG_API_KEY }}"
+            app_key = "{{ env.DATADOG_APP_KEY }}"
           }
         }
         "bash" = {

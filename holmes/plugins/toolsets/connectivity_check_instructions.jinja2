@@ -1,0 +1,24 @@
+Use the `tcp_check` tool to verify raw TCP connectivity between the Holmes pod and a remote host/port.
+
+**When to use:**
+- Diagnosing "connection refused" or "connection timed out" errors — verify the target is reachable at the network level
+- Confirming a database port is open (e.g., port 5432 for PostgreSQL, 3306 for MySQL, 6379 for Redis, 27017 for MongoDB)
+- Checking whether a service's load balancer or ingress is accepting connections on the expected port
+- Ruling out network-level issues (firewall rules, security groups, VPC routing) before investigating application-level errors
+- Verifying that a newly deployed service is listening on the correct port
+
+**Common ports to check:**
+- HTTP: 80, HTTPS: 443
+- PostgreSQL: 5432, MySQL: 3306, Redis: 6379, MongoDB: 27017, Elasticsearch: 9200
+- Kafka: 9092, RabbitMQ: 5672, AMQP: 5671
+- SMTP: 25/587, LDAP: 389/636
+
+**Interpreting results:**
+- `ok: true` — TCP handshake succeeded; the host is reachable and the port is open (does NOT mean the application is healthy)
+- `ok: false, error: "Connection refused"` — host is reachable but nothing is listening on that port
+- `ok: false, error: "timed out"` — host is unreachable or a firewall is silently dropping packets
+
+**Limitations:**
+- Only tests TCP layer — a successful check does not guarantee the application is responding correctly
+- Cannot test UDP services
+- Results reflect connectivity from the Holmes pod's network namespace, not from the affected service's perspective

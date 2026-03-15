@@ -161,6 +161,10 @@ class ChatRequest(ChatRequestBaseModel):
         default=None,
         description="Override prompt components (e.g., {'todowrite_instructions': false}). Env var ENABLED_PROMPTS takes precedence.",
     )
+    project_id: Optional[str] = Field(
+        default=None,
+        description="If set, scope tool execution to the toolset instances defined in this project.",
+    )
 
 
 class FollowUpAction(BaseModel):
