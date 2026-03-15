@@ -245,6 +245,7 @@ jobs:
             -reconfigure
         env:
           AWS_PROFILE: ""
+          AWS_DEFAULT_REGION: ${{ env.AWS_REGION }}
 
       # ── Plan ──────────────────────────────────────────────────────────────────
 
@@ -276,6 +277,7 @@ jobs:
           fi
         env:
           AWS_PROFILE: ""
+          AWS_DEFAULT_REGION: ${{ env.AWS_REGION }}
 
       # ── Post plan as PR comment ───────────────────────────────────────────────
 
@@ -342,6 +344,7 @@ jobs:
           aws eks get-token --cluster-name "holmesgpt-${{ matrix.env }}" --region ${{ env.AWS_REGION }} | head -c 200
         env:
           AWS_PROFILE: ""
+          AWS_DEFAULT_REGION: ${{ env.AWS_REGION }}
 
       - name: OpenTofu apply (${{ matrix.env }})
         if: env.RUN_APPLY == 'true' && env.HAVE_CREDS == 'true'
@@ -360,6 +363,7 @@ jobs:
             2>&1 | tee /tmp/apply_output.txt
         env:
           AWS_PROFILE: ""
+          AWS_DEFAULT_REGION: ${{ env.AWS_REGION }}
 
       # ── Summary ───────────────────────────────────────────────────────────────
 
