@@ -84,7 +84,7 @@ export default function Layout({
             <select
               value={selectedProjectId ?? ''}
               onChange={(e) => onSelectProject(e.target.value || null)}
-              className={`w-full text-sm bg-white/8 text-white border border-white/15 rounded-lg ${selectedProjectId ? 'pl-6' : 'pl-3'} py-2 pr-8 focus:outline-none focus:ring-2 focus:ring-pdi-sky/50 focus:border-pdi-sky/50 appearance-none cursor-pointer transition-colors hover:bg-white/12`}
+              className={`w-full text-sm bg-white/[0.08] text-white border border-white/[0.15] rounded-lg ${selectedProjectId ? 'pl-6' : 'pl-3'} py-2 pr-8 focus:outline-none focus:ring-2 focus:ring-pdi-sky/50 focus:border-pdi-sky/50 appearance-none cursor-pointer transition-colors hover:bg-white/[0.12]`}
             >
               <option value="" className="bg-pdi-indigo text-white">All integrations</option>
               {projects.map((p) => (
@@ -129,7 +129,7 @@ export default function Layout({
                       className={`relative w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
                         isActive
                           ? 'bg-gradient-to-r from-pdi-sky/20 to-transparent text-pdi-sky'
-                          : 'text-white/60 hover:bg-white/8 hover:text-white/90'
+                          : 'text-white/60 hover:bg-white/[0.08] hover:text-white/90'
                       }`}
                     >
                       {/* Active left border indicator */}
@@ -137,7 +137,7 @@ export default function Layout({
                         <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-pdi-sky rounded-r-full" />
                       )}
                       <svg
-                        className={`w-4.5 h-4.5 shrink-0 ${isActive ? 'text-pdi-sky' : 'text-white/40'}`}
+                        className={`w-4 h-4 shrink-0 ${isActive ? 'text-pdi-sky' : 'text-white/40'}`}
                         fill="none"
                         viewBox="0 0 24 24"
                         stroke="currentColor"
@@ -156,7 +156,7 @@ export default function Layout({
 
         {/* Profile footer */}
         <div className="px-3 py-3 border-t border-white/10">
-          <div className="group flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-white/6 transition-colors cursor-pointer" onClick={onLogout}>
+          <div className="group flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-white/[0.06] transition-colors cursor-pointer" onClick={onLogout}>
             {/* Avatar */}
             <div className="w-7 h-7 rounded-full bg-gradient-to-br from-pdi-sky/60 to-pdi-ocean/80 flex items-center justify-center shrink-0">
               <span className="text-white text-xs font-bold">A</span>
