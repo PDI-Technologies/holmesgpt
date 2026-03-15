@@ -24,11 +24,11 @@ terraform {
   # -backend-config flags (see .github/workflows/pdi-iac.yaml and the ship skill).
   # For local development, run:
   #   tofu init -backend-config=envs/backend-dev.hcl
-  # where backend-dev.hcl contains:
-  #   bucket  = "holmesgpt-tfstate-717423812395"
+  # where backend-dev.hcl contains (see envs/backend-dev.hcl.example):
+  #   bucket  = "holmesgpt-tfstate-<ACCOUNT_ID>"
   #   key     = "holmesgpt/dev/terraform.tfstate"
   #   region  = "us-east-1"
-  #   profile = "pdi-platform-dev"
+  #   profile = "<AWS_PROFILE>"
   #   encrypt = true
   backend "s3" {}
 

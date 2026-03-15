@@ -251,5 +251,5 @@ If empty, the `npm run build` step in `Dockerfile.frontend` failed. Check Docker
 | Namespace | `holmesgpt` |
 | ECR Repo | `<AWS_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/holmesgpt` |
 | LLM Model | `anthropic/claude-sonnet-4-5-20250929` |
-| API Gateway | `https://ai-gateway.platform.pditechnologies.com` |
+| API Gateway | `https://<LLM_GATEWAY_URL>` |
 | Node Type | `t3.medium` (1-2 nodes) |

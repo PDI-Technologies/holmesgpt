@@ -1,0 +1,71 @@
+# Dev environment template — copy to dev.tfvars and fill in your values.
+# dev.tfvars is gitignored to prevent leaking account IDs and infrastructure details.
+
+aws_profile = "<AWS_PROFILE>"
+aws_region  = "us-east-1"
+environment = "dev"
+
+# Networking
+vpc_id = "<VPC_ID>"
+
+private_subnet_ids = [
+  "<PRIVATE_SUBNET_ID_AZ_A>",
+  "<PRIVATE_SUBNET_ID_AZ_B>",
+]
+
+public_subnet_ids = [
+  "<PUBLIC_SUBNET_ID_AZ_A>",
+  "<PUBLIC_SUBNET_ID_AZ_B>",
+]
+
+# EKS
+eks_cluster_version = "1.32"
+node_instance_type  = "t3.medium"
+node_min_size       = 1
+node_max_size       = 2
+node_desired_size   = 1
+
+# DNS & TLS
+route53_zone_id     = "<ROUTE53_ZONE_ID>"
+route53_zone_name   = "<DEV_ZONE_DOMAIN>"
+acm_certificate_arn = "arn:aws:acm:us-east-1:<AWS_ACCOUNT_ID>:certificate/<ACM_CERT_ID>"
+hostname            = "holmesgpt.<DEV_ZONE_DOMAIN>"
+
+# LLM
+anthropic_api_base = "<LLM_GATEWAY_URL>"
+anthropic_api_key  = "" # Set via TF_VAR_anthropic_api_key or -var flag
+holmes_model       = "anthropic/claude-sonnet-4-5-20250929"
+
+# Holmes
+holmes_replicas  = 1
+holmes_image_tag = "latest"
+
+# UI Auth
+holmes_ui_username = "admin"
+holmes_ui_password = "" # Stored in Secrets Manager after first apply; set via TF_VAR_holmes_ui_password on first run
+
+# MCP Integration API Keys
+mcp_ado_api_key        = "" # Set via TF_VAR_mcp_ado_api_key or -var flag
+mcp_atlassian_api_key  = "" # Set via TF_VAR_mcp_atlassian_api_key or -var flag
+mcp_salesforce_api_key = "" # Set via TF_VAR_mcp_salesforce_api_key or -var flag
+
+# Tags
+tags = {
+  Team        = "platform"
+  CostCenter  = "engineering"
+  Application = "holmesgpt"
+}
+
+# Logistics cross-account access
+# HolmesReadOnly roles are deployed via infra/logistics-cross-account/ into each account.
+# Add entries for each AWS account Holmes should be able to investigate.
+logistics_accounts = {
+  # example-account = {
+  #   account_id = "<ACCOUNT_ID>"
+  #   role_arn   = "arn:aws:iam::<ACCOUNT_ID>:role/HolmesReadOnly"
+  #   region     = "us-east-1"
+  # }
+}
+
+# Enable the AWS MCP server addon once real account IDs are configured
+aws_mcp_enabled = false

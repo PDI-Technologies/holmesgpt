@@ -1,6 +1,7 @@
-# Prod environment - placeholder (update with actual values)
+# Prod environment template — copy to prod.tfvars and fill in your values.
+# prod.tfvars is gitignored to prevent leaking account IDs and infrastructure details.
 
-aws_profile = "pdi-platform-production"
+aws_profile = "<PROD_AWS_PROFILE>"
 aws_region  = "us-east-1"
 environment = "prod"
 
@@ -26,12 +27,12 @@ node_desired_size   = 2
 
 # DNS & TLS - update with prod zone
 route53_zone_id     = "" # TODO: prod Route53 zone ID
-route53_zone_name   = "" # TODO: prod zone name (e.g., platform.pditechnologies.com)
+route53_zone_name   = "" # TODO: prod zone name (e.g., platform.example.com)
 acm_certificate_arn = "" # TODO: prod ACM wildcard cert ARN
-hostname            = "" # TODO: e.g., holmesgpt.platform.pditechnologies.com
+hostname            = "" # TODO: e.g., holmesgpt.platform.example.com
 
 # LLM
-anthropic_api_base = "https://ai-gateway.platform.pditechnologies.com"
+anthropic_api_base = "<LLM_GATEWAY_URL>"
 anthropic_api_key  = "" # Set via TF_VAR_anthropic_api_key or -var flag
 holmes_model       = "anthropic/claude-sonnet-4-5-20250929"
 

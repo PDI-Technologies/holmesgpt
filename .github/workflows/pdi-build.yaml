@@ -27,7 +27,8 @@ concurrency:
 env:
   AWS_REGION: us-east-1
   # Dev ECR — used for PR builds (prod ECR is only used at deploy time)
-  ECR_REGISTRY: 717423812395.dkr.ecr.us-east-1.amazonaws.com
+  # Set PDI_DEV_ECR_REGISTRY secret in GitHub repository settings
+  ECR_REGISTRY: ${{ secrets.PDI_DEV_ECR_REGISTRY }}
   ECR_REPOSITORY: holmesgpt
   IMAGE_TAG: ${{ github.sha }}
 

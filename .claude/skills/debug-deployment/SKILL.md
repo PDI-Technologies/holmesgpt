@@ -304,7 +304,7 @@ kubectl exec -n holmesgpt deployment/holmes-holmes -- \
 
 ```bash
 kubectl exec -n holmesgpt deployment/holmes-holmes -- \
-  wget -q -O- https://ai-gateway.platform.pditechnologies.com/health 2>&1
+  wget -q -O- https://<LLM_GATEWAY_URL>/health 2>&1
 ```
 
 ---

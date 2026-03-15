@@ -84,7 +84,7 @@ variable "acm_certificate_arn" {
 }
 
 variable "hostname" {
-  description = "Hostname for Holmes (e.g., holmesgpt.dev.platform.pditechnologies.com)"
+  description = "Hostname for Holmes (e.g., holmesgpt.dev.example.com)"
   type        = string
 }
 
@@ -92,7 +92,7 @@ variable "hostname" {
 variable "anthropic_api_base" {
   description = "Anthropic API base URL"
   type        = string
-  default     = "https://ai-gateway.platform.pditechnologies.com"
+  default     = "https://<LLM_GATEWAY_URL>"
 }
 
 variable "anthropic_api_key" {

@@ -1,8 +1,8 @@
 # OpenTofu IaC workflow for the PDI HolmesGPT infrastructure.
 #
 # Environments:
-#   dev  — pdi-platform-dev  (account 717423812395)  — deploys on push to main
-#   prod — pdi-platform-production                   — deploys on push to release/** or workflow_dispatch
+#   dev  — <AWS_PROFILE>  (account <AWS_ACCOUNT_ID>)  — deploys on push to main
+#   prod — pdi-platform-production                    — deploys on push to release/** or workflow_dispatch
 #
 # On pull_request (infra/** changes):
 #   - Runs `tofu plan` for BOTH environments and posts the plan diff as a PR comment
@@ -17,8 +17,8 @@
 #   This workflow uses an S3 backend for remote state so that CI and local
 #   development share the same state file.
 #
-#   Dev state:  s3://holmesgpt-tfstate-717423812395/holmesgpt/dev/terraform.tfstate
-#   Prod state: s3://holmesgpt-tfstate-<PROD_ACCOUNT_ID>/holmesgpt/prod/terraform.tfstate
+#   Dev state:  s3://<PDI_DEV_TF_STATE_BUCKET>/holmesgpt/dev/terraform.tfstate
+#   Prod state: s3://<PDI_PROD_TF_STATE_BUCKET>/holmesgpt/prod/terraform.tfstate
 #
 #   One-time setup per environment (run locally before first CI apply):
 #     aws s3api create-bucket \
@@ -39,13 +39,27 @@
 #     cd infra && tofu init -backend-config=envs/backend-dev.hcl   # dev
 #     cd infra && tofu init -backend-config=envs/backend-prod.hcl  # prod
 #
-# Required GitHub Secrets (repository-level):
+# Required GitHub Secrets (repository-level, Settings > Secrets and variables > Actions > Secrets):
 #   PDI_AWS_ACCESS_KEY_ID          — dev IAM access key
 #   PDI_AWS_SECRET_ACCESS_KEY      — dev IAM secret key
 #   PDI_ANTHROPIC_API_KEY          — Anthropic API key for Holmes (dev)
 #   PDI_MCP_ADO_API_KEY            — Azure DevOps PAT (dev)
 #   PDI_MCP_ATLASSIAN_API_KEY      — Atlassian API key (dev)
 #   PDI_MCP_SALESFORCE_API_KEY     — Salesforce API key (dev)
+#   PDI_DEV_TF_STATE_BUCKET        — S3 bucket name for dev state
+#   PDI_DEV_HOLMES_UI_PASSWORD     — Holmes UI login password (dev)
+#
+# Required GitHub Variables (repository-level, Settings > Secrets and variables > Actions > Variables):
+#   PDI_DEV_VPC_ID                 — VPC ID for dev environment
+#   PDI_DEV_PRIVATE_SUBNET_IDS     — JSON array of private subnet IDs, e.g. '["subnet-aaa","subnet-bbb"]'
+#   PDI_DEV_PUBLIC_SUBNET_IDS      — JSON array of public subnet IDs
+#   PDI_DEV_ROUTE53_ZONE_ID        — Route53 hosted zone ID
+#   PDI_DEV_ROUTE53_ZONE_NAME      — Route53 hosted zone domain name
+#   PDI_DEV_ACM_CERT_ARN           — ACM certificate ARN for HTTPS
+#   PDI_DEV_HOSTNAME               — Hostname for Holmes (e.g. holmesgpt.dev.example.com)
+#   PDI_DEV_ANTHROPIC_API_BASE     — LLM gateway base URL
+#   PDI_DEV_HOLMES_MODEL           — LLM model name (e.g. anthropic/claude-sonnet-4-5-20250929)
+#   PDI_DEV_HOLMES_IMAGE_TAG       — Docker image tag to deploy (e.g. latest)
 #
 # Required GitHub Secrets (prod environment — configure under Settings > Environments > prod):
 #   PDI_PROD_AWS_ACCESS_KEY_ID     — prod IAM access key
@@ -54,8 +68,21 @@
 #   PDI_PROD_MCP_ADO_API_KEY       — Azure DevOps PAT (prod)
 #   PDI_PROD_MCP_ATLASSIAN_API_KEY — Atlassian API key (prod)
 #   PDI_PROD_MCP_SALESFORCE_API_KEY — Salesforce API key (prod)
-#   PDI_PROD_TF_STATE_BUCKET       — S3 bucket name for prod state (holmesgpt-tfstate-<PROD_ACCOUNT_ID>)
+#   PDI_PROD_TF_STATE_BUCKET       — S3 bucket name for prod state
 #   PDI_PROD_ECR_REGISTRY          — ECR registry URL (<PROD_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com)
+#   PDI_PROD_HOLMES_UI_PASSWORD    — Holmes UI login password (prod)
+#
+# Required GitHub Variables (prod environment — configure under Settings > Environments > prod):
+#   PDI_PROD_VPC_ID                — VPC ID for prod environment
+#   PDI_PROD_PRIVATE_SUBNET_IDS    — JSON array of private subnet IDs
+#   PDI_PROD_PUBLIC_SUBNET_IDS     — JSON array of public subnet IDs
+#   PDI_PROD_ROUTE53_ZONE_ID       — Route53 hosted zone ID
+#   PDI_PROD_ROUTE53_ZONE_NAME     — Route53 hosted zone domain name
+#   PDI_PROD_ACM_CERT_ARN          — ACM certificate ARN for HTTPS
+#   PDI_PROD_HOSTNAME              — Hostname for Holmes (e.g. holmesgpt.platform.example.com)
+#   PDI_PROD_ANTHROPIC_API_BASE    — LLM gateway base URL
+#   PDI_PROD_HOLMES_MODEL          — LLM model name
+#   PDI_PROD_HOLMES_IMAGE_TAG      — Docker image tag to deploy
 
 name: PDI — IaC
 
@@ -173,21 +200,88 @@ jobs:
             echo "AWS_SECRET_ACCESS_KEY=${{ secrets.PDI_PROD_AWS_SECRET_ACCESS_KEY }}" >> $GITHUB_ENV
             echo "TF_STATE_BUCKET=${{ secrets.PDI_PROD_TF_STATE_BUCKET }}" >> $GITHUB_ENV
             echo "TF_STATE_KEY=holmesgpt/prod/terraform.tfstate" >> $GITHUB_ENV
-            echo "TF_VARFILE=envs/prod.tfvars" >> $GITHUB_ENV
+            echo "TF_VARFILE=envs/ci-prod.tfvars" >> $GITHUB_ENV
             echo "ANTHROPIC_API_KEY=${{ secrets.PDI_PROD_ANTHROPIC_API_KEY }}" >> $GITHUB_ENV
             echo "MCP_ADO_API_KEY=${{ secrets.PDI_PROD_MCP_ADO_API_KEY }}" >> $GITHUB_ENV
             echo "MCP_ATLASSIAN_API_KEY=${{ secrets.PDI_PROD_MCP_ATLASSIAN_API_KEY }}" >> $GITHUB_ENV
             echo "MCP_SALESFORCE_API_KEY=${{ secrets.PDI_PROD_MCP_SALESFORCE_API_KEY }}" >> $GITHUB_ENV
+            echo "HOLMES_UI_PASSWORD=${{ secrets.PDI_PROD_HOLMES_UI_PASSWORD }}" >> $GITHUB_ENV
           else
             echo "AWS_ACCESS_KEY_ID=${{ secrets.PDI_AWS_ACCESS_KEY_ID }}" >> $GITHUB_ENV
             echo "AWS_SECRET_ACCESS_KEY=${{ secrets.PDI_AWS_SECRET_ACCESS_KEY }}" >> $GITHUB_ENV
-            echo "TF_STATE_BUCKET=holmesgpt-tfstate-717423812395" >> $GITHUB_ENV
+            echo "TF_STATE_BUCKET=${{ secrets.PDI_DEV_TF_STATE_BUCKET }}" >> $GITHUB_ENV
             echo "TF_STATE_KEY=holmesgpt/dev/terraform.tfstate" >> $GITHUB_ENV
-            echo "TF_VARFILE=envs/dev.tfvars" >> $GITHUB_ENV
+            echo "TF_VARFILE=envs/ci-dev.tfvars" >> $GITHUB_ENV
             echo "ANTHROPIC_API_KEY=${{ secrets.PDI_ANTHROPIC_API_KEY }}" >> $GITHUB_ENV
             echo "MCP_ADO_API_KEY=${{ secrets.PDI_MCP_ADO_API_KEY }}" >> $GITHUB_ENV
             echo "MCP_ATLASSIAN_API_KEY=${{ secrets.PDI_MCP_ATLASSIAN_API_KEY }}" >> $GITHUB_ENV
             echo "MCP_SALESFORCE_API_KEY=${{ secrets.PDI_MCP_SALESFORCE_API_KEY }}" >> $GITHUB_ENV
+            echo "HOLMES_UI_PASSWORD=${{ secrets.PDI_DEV_HOLMES_UI_PASSWORD }}" >> $GITHUB_ENV
+          fi
+
+      # ── Generate tfvars from GitHub Secrets/Variables ─────────────────────────
+      # The *.tfvars files are gitignored (they contain real account IDs, VPC IDs,
+      # etc.). CI generates them at runtime from GitHub Secrets (sensitive values)
+      # and GitHub Variables (non-sensitive config stored under Settings > Variables).
+
+      - name: Generate tfvars (${{ matrix.env }})
+        working-directory: infra
+        run: |
+          ENV="${{ matrix.env }}"
+          if [ "$ENV" = "prod" ]; then
+            cat > envs/ci-prod.tfvars << 'TFVARS_EOF'
+          aws_profile = ""
+          environment = "prod"
+
+          vpc_id             = "${{ vars.PDI_PROD_VPC_ID }}"
+          private_subnet_ids = ${{ vars.PDI_PROD_PRIVATE_SUBNET_IDS }}
+          public_subnet_ids  = ${{ vars.PDI_PROD_PUBLIC_SUBNET_IDS }}
+
+          route53_zone_id     = "${{ vars.PDI_PROD_ROUTE53_ZONE_ID }}"
+          route53_zone_name   = "${{ vars.PDI_PROD_ROUTE53_ZONE_NAME }}"
+          acm_certificate_arn = "${{ vars.PDI_PROD_ACM_CERT_ARN }}"
+          hostname            = "${{ vars.PDI_PROD_HOSTNAME }}"
+
+          anthropic_api_base = "${{ vars.PDI_PROD_ANTHROPIC_API_BASE }}"
+          holmes_model       = "${{ vars.PDI_PROD_HOLMES_MODEL }}"
+          holmes_image_tag   = "${{ vars.PDI_PROD_HOLMES_IMAGE_TAG }}"
+
+          holmes_replicas    = 2
+          holmes_ui_username = "admin"
+
+          tags = {
+            Team        = "platform"
+            CostCenter  = "engineering"
+            Application = "holmesgpt"
+          }
+          TFVARS_EOF
+          else
+            cat > envs/ci-dev.tfvars << 'TFVARS_EOF'
+          aws_profile = ""
+          environment = "dev"
+
+          vpc_id             = "${{ vars.PDI_DEV_VPC_ID }}"
+          private_subnet_ids = ${{ vars.PDI_DEV_PRIVATE_SUBNET_IDS }}
+          public_subnet_ids  = ${{ vars.PDI_DEV_PUBLIC_SUBNET_IDS }}
+
+          route53_zone_id     = "${{ vars.PDI_DEV_ROUTE53_ZONE_ID }}"
+          route53_zone_name   = "${{ vars.PDI_DEV_ROUTE53_ZONE_NAME }}"
+          acm_certificate_arn = "${{ vars.PDI_DEV_ACM_CERT_ARN }}"
+          hostname            = "${{ vars.PDI_DEV_HOSTNAME }}"
+
+          anthropic_api_base = "${{ vars.PDI_DEV_ANTHROPIC_API_BASE }}"
+          holmes_model       = "${{ vars.PDI_DEV_HOLMES_MODEL }}"
+          holmes_image_tag   = "${{ vars.PDI_DEV_HOLMES_IMAGE_TAG }}"
+
+          holmes_replicas    = 1
+          holmes_ui_username = "admin"
+
+          tags = {
+            Team        = "platform"
+            CostCenter  = "engineering"
+            Application = "holmesgpt"
+          }
+          TFVARS_EOF
           fi
 
       - name: Configure AWS credentials
@@ -239,6 +333,7 @@ jobs:
             -var-file="${{ env.TF_VARFILE }}" \
             -var="aws_profile=" \
             -var="anthropic_api_key=${{ env.ANTHROPIC_API_KEY }}" \
+            -var="holmes_ui_password=${{ env.HOLMES_UI_PASSWORD }}" \
             -var="mcp_ado_api_key=${{ env.MCP_ADO_API_KEY }}" \
             -var="mcp_atlassian_api_key=${{ env.MCP_ATLASSIAN_API_KEY }}" \
             -var="mcp_salesforce_api_key=${{ env.MCP_SALESFORCE_API_KEY }}" \
@@ -321,6 +416,7 @@ jobs:
             -var-file="${{ env.TF_VARFILE }}" \
             -var="aws_profile=" \
             -var="anthropic_api_key=${{ env.ANTHROPIC_API_KEY }}" \
+            -var="holmes_ui_password=${{ env.HOLMES_UI_PASSWORD }}" \
             -var="mcp_ado_api_key=${{ env.MCP_ADO_API_KEY }}" \
             -var="mcp_atlassian_api_key=${{ env.MCP_ATLASSIAN_API_KEY }}" \
             -var="mcp_salesforce_api_key=${{ env.MCP_SALESFORCE_API_KEY }}" \

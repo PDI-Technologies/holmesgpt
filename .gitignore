@@ -182,6 +182,10 @@ infra/**/*.tfstate
 infra/**/*.tfstate.backup
 infra/**/*.tfplan
 infra/envs/*.auto.tfvars
+# Environment-specific tfvars and backend configs contain real account IDs, VPC IDs, etc.
+# Use the *.example template files and fill in your own values.
+infra/envs/*.tfvars
+infra/envs/backend-*.hcl
 
 # Frontend build artifacts
 infra/frontend/node_modules/
