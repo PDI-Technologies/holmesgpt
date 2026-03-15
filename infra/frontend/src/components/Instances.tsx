@@ -55,20 +55,20 @@ function TagsEditor({
             placeholder="key"
             value={k}
             onChange={(e) => updateKey(k, e.target.value)}
-            className="w-32 text-sm border border-gray-300 rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-pdi-sky font-mono"
+            className="w-32 text-sm border border-pdi-cool-gray rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-pdi-sky font-mono"
           />
-          <span className="text-gray-400 text-sm">=</span>
+          <span className="text-pdi-slate text-sm">=</span>
           <input
             type="text"
             placeholder="value"
             value={v}
             onChange={(e) => updateValue(k, e.target.value)}
-            className="flex-1 text-sm border border-gray-300 rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-pdi-sky font-mono"
+            className="flex-1 text-sm border border-pdi-cool-gray rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-pdi-sky font-mono"
           />
           <button
             type="button"
             onClick={() => removeTag(k)}
-            className="text-gray-400 hover:text-red-500 transition-colors"
+            className="text-pdi-slate hover:text-pdi-orange transition-colors"
             title="Remove tag"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -88,7 +88,7 @@ function TagsEditor({
         Add tag
       </button>
       {entries.length === 0 && (
-        <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
+        <p className="text-xs text-pdi-sun bg-pdi-sun/10 border border-pdi-sun/20 rounded px-2 py-1.5">
           No tags — this instance will be <strong>global</strong> (available to all projects)
         </p>
       )}
@@ -154,18 +154,18 @@ function InstanceFormDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden max-h-[90vh] flex flex-col">
-        <div className="px-6 py-4 border-b border-gray-100">
-          <h2 className="text-lg font-semibold text-gray-900">
+        <div className="px-6 py-4 border-b border-pdi-cool-gray">
+          <h2 className="text-lg font-semibold text-pdi-granite">
             {instance ? 'Edit Instance' : 'Create Instance'}
           </h2>
         </div>
         <div className="px-6 py-5 space-y-4 overflow-y-auto flex-1">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
+            <label className="block text-sm font-medium text-pdi-granite mb-1">Type</label>
             <select
               value={type}
               onChange={(e) => setType(e.target.value)}
-              className="w-full text-sm border border-gray-300 rounded-md px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-pdi-sky"
+              className="w-full text-sm border border-pdi-cool-gray rounded-md px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-pdi-sky"
             >
               {TOOLSET_TYPES.map((t) => (
                 <option key={t} value={t}>{t}</option>
@@ -174,70 +174,70 @@ function InstanceFormDialog({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+            <label className="block text-sm font-medium text-pdi-granite mb-1">Name</label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. grafana-retail-prod"
-              className="w-full text-sm border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-pdi-sky"
+              className="w-full text-sm border border-pdi-cool-gray rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-pdi-sky"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Tags</label>
-            <p className="text-xs text-gray-500 mb-2">
+            <label className="block text-sm font-medium text-pdi-granite mb-2">Tags</label>
+            <p className="text-xs text-pdi-slate mb-2">
               Tags are used to match this instance to projects. Instances with no tags are global.
             </p>
             <TagsEditor tags={tags} onChange={setTags} />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Secret ARN</label>
+            <label className="block text-sm font-medium text-pdi-granite mb-1">Secret ARN</label>
             <input
               type="text"
               value={secretArn}
               onChange={(e) => setSecretArn(e.target.value)}
               placeholder="arn:aws:secretsmanager:... (optional)"
-              className="w-full text-sm border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-pdi-sky"
+              className="w-full text-sm border border-pdi-cool-gray rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-pdi-sky"
             />
-            <p className="text-xs text-gray-400 mt-1">Leave blank to use globally configured credentials.</p>
+            <p className="text-xs text-pdi-slate mt-1">Leave blank to use globally configured credentials.</p>
           </div>
 
           {isMcp && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">MCP Server URL</label>
+              <label className="block text-sm font-medium text-pdi-granite mb-1">MCP Server URL</label>
               <input
                 type="text"
                 value={mcpUrl}
                 onChange={(e) => setMcpUrl(e.target.value)}
                 placeholder="https://... (optional — leave blank for global)"
-                className="w-full text-sm border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-pdi-sky"
+                className="w-full text-sm border border-pdi-cool-gray rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-pdi-sky"
               />
             </div>
           )}
 
           {isAws && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">AWS Accounts</label>
+              <label className="block text-sm font-medium text-pdi-granite mb-1">AWS Accounts</label>
               <input
                 type="text"
                 value={awsAccounts}
                 onChange={(e) => setAwsAccounts(e.target.value)}
                 placeholder="account1, account2 (leave blank for all)"
-                className="w-full text-sm border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-pdi-sky"
+                className="w-full text-sm border border-pdi-cool-gray rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-pdi-sky"
               />
-              <p className="text-xs text-gray-400 mt-1">Comma-separated account profile names. Leave blank to allow all.</p>
+              <p className="text-xs text-pdi-slate mt-1">Comma-separated account profile names. Leave blank to allow all.</p>
             </div>
           )}
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-sm text-pdi-orange">{error}</p>}
         </div>
-        <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
+        <div className="px-6 py-4 border-t border-pdi-cool-gray flex justify-end gap-3">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            className="px-4 py-2 text-sm font-medium text-pdi-slate bg-white border border-pdi-cool-gray rounded-lg hover:bg-gray-50 transition-colors"
           >
             Cancel
           </button>
@@ -292,8 +292,8 @@ export default function Instances() {
       <div className="max-w-4xl mx-auto px-6 py-8">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Instances</h1>
-            <p className="text-sm text-gray-500 mt-1">
+            <h1 className="text-2xl font-bold text-pdi-granite">Instances</h1>
+            <p className="text-sm text-pdi-slate mt-1">
               Integration instances with tags. Projects use tag filters to select which instances to use.
               Untagged instances are global — available to all projects.
             </p>
@@ -310,30 +310,30 @@ export default function Instances() {
         </div>
 
         {loading ? (
-          <div className="text-center py-16 text-gray-400 text-sm">Loading…</div>
+          <div className="text-center py-16 text-pdi-slate text-sm">Loading…</div>
         ) : instances.length === 0 ? (
-          <div className="text-center py-16 text-gray-400">
+          <div className="text-center py-16 text-pdi-slate">
             <svg className="w-12 h-12 mx-auto mb-3 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
             </svg>
             <p className="text-sm">No instances yet. Create one to get started.</p>
           </div>
         ) : (
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="bg-white rounded-xl border border-pdi-cool-gray overflow-hidden">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-gray-100 bg-gray-50">
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Name</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Type</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Tags</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Scope</th>
+                <tr className="border-b border-pdi-cool-gray bg-gray-50">
+                  <th className="text-left px-4 py-3 font-medium text-pdi-slate">Name</th>
+                  <th className="text-left px-4 py-3 font-medium text-pdi-slate">Type</th>
+                  <th className="text-left px-4 py-3 font-medium text-pdi-slate">Tags</th>
+                  <th className="text-left px-4 py-3 font-medium text-pdi-slate">Scope</th>
                   <th className="px-4 py-3" />
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-pdi-cool-gray">
                 {instances.map((inst) => (
                   <tr key={inst.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-3 font-medium text-gray-900">{inst.name}</td>
+                    <td className="px-4 py-3 font-medium text-pdi-granite">{inst.name}</td>
                     <td className="px-4 py-3">
                       <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-pdi-sky/10 text-pdi-indigo">
                         {inst.type}
@@ -344,23 +344,23 @@ export default function Instances() {
                         {Object.entries(inst.tags).map(([k, v]) => (
                           <span
                             key={k}
-                            className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-mono bg-gray-100 text-gray-700"
+                            className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-mono bg-gray-100 text-pdi-granite"
                           >
                             {k}={v}
                           </span>
                         ))}
                         {Object.keys(inst.tags).length === 0 && (
-                          <span className="text-xs text-gray-400">—</span>
+                          <span className="text-xs text-pdi-slate">—</span>
                         )}
                       </div>
                     </td>
                     <td className="px-4 py-3">
                       {isGlobal(inst) ? (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-pdi-sun/15 text-pdi-sun">
                           Global
                         </span>
                       ) : (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-pdi-sky/10 text-pdi-sky">
                           Tagged
                         </span>
                       )}
@@ -368,16 +368,16 @@ export default function Instances() {
                     <td className="px-4 py-3">
                       {confirmDeleteId === inst.id ? (
                         <div className="flex items-center justify-end gap-2">
-                          <span className="text-xs text-gray-600">Delete?</span>
+                          <span className="text-xs text-pdi-slate">Delete?</span>
                           <button
                             onClick={() => handleDeleteConfirmed(inst.id)}
-                            className="px-2 py-1 text-xs font-medium text-white bg-red-500 rounded hover:bg-red-600 transition-colors"
+                            className="px-2 py-1 text-xs font-medium text-white bg-pdi-orange rounded hover:bg-pdi-orange/90 transition-colors"
                           >
                             Yes
                           </button>
                           <button
                             onClick={() => setConfirmDeleteId(null)}
-                            className="px-2 py-1 text-xs font-medium text-gray-600 bg-gray-100 rounded hover:bg-gray-200 transition-colors"
+                            className="px-2 py-1 text-xs font-medium text-pdi-slate bg-gray-100 rounded hover:bg-gray-200 transition-colors"
                           >
                             No
                           </button>
@@ -386,7 +386,7 @@ export default function Instances() {
                         <div className="flex items-center justify-end gap-1">
                           <button
                             onClick={() => setEditingInstance(inst)}
-                            className="p-1.5 text-gray-400 hover:text-pdi-sky transition-colors rounded"
+                            className="p-1.5 text-pdi-slate hover:text-pdi-sky transition-colors rounded"
                             title="Edit"
                           >
                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -396,7 +396,7 @@ export default function Instances() {
                           <button
                             onClick={() => setConfirmDeleteId(inst.id)}
                             disabled={deleting === inst.id}
-                            className="p-1.5 text-gray-400 hover:text-red-500 transition-colors rounded disabled:opacity-40"
+                            className="p-1.5 text-pdi-slate hover:text-pdi-orange transition-colors rounded disabled:opacity-40"
                             title="Delete"
                           >
                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>

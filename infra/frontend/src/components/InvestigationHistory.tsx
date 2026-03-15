@@ -21,10 +21,10 @@ function sourceBadgeClass(source: string): string {
   const map: Record<string, string> = {
     ui: 'bg-pdi-sky/10 text-pdi-indigo',
     cli: 'bg-gray-100 text-gray-600',
-    pagerduty: 'bg-green-50 text-green-700',
-    ado: 'bg-blue-50 text-blue-700',
-    salesforce: 'bg-sky-50 text-sky-700',
-    webhook: 'bg-purple-50 text-purple-700',
+    pagerduty: 'bg-pdi-grass/10 text-pdi-grass',
+    ado: 'bg-pdi-sky/10 text-pdi-sky',
+    salesforce: 'bg-pdi-ocean/10 text-pdi-ocean',
+    webhook: 'bg-pdi-plum/10 text-pdi-plum',
   }
   return map[source.toLowerCase()] ?? 'bg-gray-100 text-gray-600'
 }
@@ -32,23 +32,23 @@ function sourceBadgeClass(source: string): string {
 function statusBadge(status: string) {
   if (status === 'completed') {
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700">
-        <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-pdi-grass/10 text-pdi-grass">
+        <span className="w-1.5 h-1.5 rounded-full bg-pdi-grass inline-block" />
         Completed
       </span>
     )
   }
   if (status === 'failed') {
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-600">
-        <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" />
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-pdi-orange/10 text-pdi-orange">
+        <span className="w-1.5 h-1.5 rounded-full bg-pdi-orange inline-block" />
         Failed
       </span>
     )
   }
   return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700">
-      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block animate-pulse" />
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-pdi-sun/10 text-pdi-sun">
+      <span className="w-1.5 h-1.5 rounded-full bg-pdi-sun inline-block animate-pulse" />
       Running
     </span>
   )
@@ -60,13 +60,13 @@ function ToolCallTrace({ calls }: { calls: Investigation['tool_calls'] }) {
   const [expanded, setExpanded] = useState<number | null>(null)
 
   if (calls.length === 0) {
-    return <p className="text-sm text-gray-400 italic">No tool calls recorded.</p>
+    return <p className="text-sm text-pdi-slate italic">No tool calls recorded.</p>
   }
 
   return (
     <div className="space-y-1.5">
       {calls.map((tc, i) => (
-        <div key={i} className="border border-gray-200 rounded-lg overflow-hidden">
+        <div key={i} className="border border-pdi-cool-gray rounded-lg overflow-hidden">
           <button
             type="button"
             onClick={() => setExpanded(expanded === i ? null : i)}
@@ -76,14 +76,14 @@ function ToolCallTrace({ calls }: { calls: Investigation['tool_calls'] }) {
               <svg className="w-3.5 h-3.5 text-pdi-sky shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
-              <code className="text-xs font-mono text-gray-800 truncate">{tc.tool_name}</code>
+              <code className="text-xs font-mono text-pdi-granite truncate">{tc.tool_name}</code>
             </div>
             <div className="flex items-center gap-2 shrink-0 ml-2">
               {tc.called_at && (
-                <span className="text-xs text-gray-400">{formatDate(tc.called_at)}</span>
+                <span className="text-xs text-pdi-slate">{formatDate(tc.called_at)}</span>
               )}
               <svg
-                className={`w-3.5 h-3.5 text-gray-400 transition-transform ${expanded === i ? 'rotate-180' : ''}`}
+                className={`w-3.5 h-3.5 text-pdi-slate transition-transform ${expanded === i ? 'rotate-180' : ''}`}
                 fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
               >
                 <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
@@ -91,13 +91,13 @@ function ToolCallTrace({ calls }: { calls: Investigation['tool_calls'] }) {
             </div>
           </button>
           {expanded === i && (
-            <div className="px-3 py-2 bg-white border-t border-gray-100">
+            <div className="px-3 py-2 bg-white border-t border-pdi-cool-gray">
               {tc.tool_output ? (
-                <pre className="text-xs text-gray-700 whitespace-pre-wrap break-words font-mono max-h-64 overflow-y-auto">
+                <pre className="text-xs text-pdi-granite whitespace-pre-wrap break-words font-mono max-h-64 overflow-y-auto">
                   {tc.tool_output}
                 </pre>
               ) : (
-                <p className="text-xs text-gray-400 italic">No output captured.</p>
+                <p className="text-xs text-pdi-slate italic">No output captured.</p>
               )}
             </div>
           )}
@@ -125,7 +125,7 @@ function InvestigationDetail({
       {/* Drawer */}
       <div className="w-full max-w-2xl bg-white shadow-2xl flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-100 flex items-start justify-between gap-4">
+        <div className="px-6 py-4 border-b border-pdi-cool-gray flex items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="flex items-center gap-2 mb-1">
               {statusBadge(investigation.status)}
@@ -133,13 +133,13 @@ function InvestigationDetail({
                 {investigation.source}
               </span>
             </div>
-            <p className="text-sm font-medium text-gray-900 line-clamp-2">{investigation.question || '(no question)'}</p>
-            <p className="text-xs text-gray-400 mt-0.5">{formatDate(investigation.started_at)}</p>
+            <p className="text-sm font-medium text-pdi-granite line-clamp-2">{investigation.question || '(no question)'}</p>
+            <p className="text-xs text-pdi-slate mt-0.5">{formatDate(investigation.started_at)}</p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="shrink-0 p-1.5 text-gray-400 hover:text-gray-600 transition-colors rounded"
+            className="shrink-0 p-1.5 text-pdi-slate hover:text-pdi-granite transition-colors rounded"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -151,22 +151,22 @@ function InvestigationDetail({
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
           {/* Answer */}
           <div>
-            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Answer</h3>
+            <h3 className="text-xs font-semibold text-pdi-slate uppercase tracking-wider mb-2">Answer</h3>
             {investigation.answer ? (
-              <div className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
+              <div className="text-sm text-pdi-granite whitespace-pre-wrap leading-relaxed">
                 {investigation.answer}
               </div>
             ) : investigation.status === 'failed' ? (
-              <p className="text-sm text-red-600">{investigation.error || 'Investigation failed.'}</p>
+              <p className="text-sm text-pdi-orange">{investigation.error || 'Investigation failed.'}</p>
             ) : (
-              <p className="text-sm text-gray-400 italic">No answer recorded.</p>
+              <p className="text-sm text-pdi-slate italic">No answer recorded.</p>
             )}
           </div>
 
           {/* Source link */}
           {investigation.source_url && (
             <div>
-              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Source</h3>
+              <h3 className="text-xs font-semibold text-pdi-slate uppercase tracking-wider mb-2">Source</h3>
               <a
                 href={investigation.source_url}
                 target="_blank"
@@ -180,7 +180,7 @@ function InvestigationDetail({
 
           {/* Tool call trace */}
           <div>
-            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+            <h3 className="text-xs font-semibold text-pdi-slate uppercase tracking-wider mb-2">
               Tool Calls ({investigation.tool_calls.length})
             </h3>
             {loading ? (
@@ -266,32 +266,35 @@ export default function InvestigationHistory() {
     <div className="h-full overflow-y-auto bg-gray-50">
       <div className="max-w-5xl mx-auto px-6 py-8">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Investigation History</h1>
-            <p className="text-sm text-gray-500 mt-1">
-              Every investigation Holmes has run — click a row to see the full tool call trace.
-            </p>
+        <div className="relative px-6 py-4 border-b border-pdi-cool-gray bg-white -mx-6 -mt-8 mb-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-bold text-pdi-granite">Investigation History</h2>
+              <p className="text-xs text-pdi-slate mt-1">
+                Every investigation Holmes has run — click a row to see the full tool call trace.
+              </p>
+            </div>
+            <button
+              onClick={load}
+              disabled={loading}
+              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-pdi-slate bg-white border border-pdi-cool-gray rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+            >
+              <svg className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Refresh
+            </button>
           </div>
-          <button
-            onClick={load}
-            disabled={loading}
-            className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
-          >
-            <svg className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            Refresh
-          </button>
+          <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-pdi-sky via-pdi-ocean to-pdi-indigo opacity-60" />
         </div>
 
         {/* Filters */}
         <div className="flex items-center gap-3 mb-4">
-          <label className="text-sm text-gray-600 font-medium shrink-0">Source:</label>
+          <label className="text-sm text-pdi-slate font-medium shrink-0">Source:</label>
           <select
             value={sourceFilter}
             onChange={(e) => setSourceFilter(e.target.value)}
-            className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-pdi-sky"
+            className="text-sm border border-pdi-cool-gray rounded-lg px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-pdi-sky"
           >
             {SOURCE_OPTIONS.map((s) => (
               <option key={s} value={s}>
@@ -300,7 +303,7 @@ export default function InvestigationHistory() {
             ))}
           </select>
           {investigations.length > 0 && (
-            <span className="text-sm text-gray-400 ml-auto">
+            <span className="text-sm text-pdi-slate ml-auto">
               {investigations.length} record{investigations.length !== 1 ? 's' : ''}
             </span>
           )}
@@ -308,7 +311,7 @@ export default function InvestigationHistory() {
 
         {/* Error */}
         {error && (
-          <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+          <div className="mb-4 px-4 py-3 bg-pdi-orange/10 border border-pdi-orange/20 rounded-lg text-sm text-pdi-orange">
             {error}
           </div>
         )}
@@ -317,14 +320,14 @@ export default function InvestigationHistory() {
         {loading && (
           <div className="space-y-2">
             {[...Array(5)].map((_, i) => (
-              <div key={i} className="h-16 bg-white rounded-xl border border-gray-200 animate-pulse" />
+              <div key={i} className="h-16 bg-white rounded-xl border border-pdi-cool-gray animate-pulse" />
             ))}
           </div>
         )}
 
         {/* Empty state */}
         {!loading && !error && investigations.length === 0 && (
-          <div className="text-center py-16 text-gray-400">
+          <div className="text-center py-16 text-pdi-slate">
             <svg className="w-12 h-12 mx-auto mb-3 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
             </svg>
@@ -334,30 +337,30 @@ export default function InvestigationHistory() {
 
         {/* Table */}
         {!loading && investigations.length > 0 && (
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="bg-white rounded-xl border border-pdi-cool-gray overflow-hidden">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-gray-100 bg-gray-50">
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider w-36">When</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Question</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider w-24">Source</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider w-24">Status</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider w-16">Tools</th>
+                <tr className="border-b border-pdi-cool-gray bg-gray-50">
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-pdi-slate uppercase tracking-wider w-36">When</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-pdi-slate uppercase tracking-wider">Question</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-pdi-slate uppercase tracking-wider w-24">Source</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-pdi-slate uppercase tracking-wider w-24">Status</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-pdi-slate uppercase tracking-wider w-16">Tools</th>
                   <th className="w-10" />
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-pdi-cool-gray">
                 {investigations.map((inv) => (
                   <tr
                     key={inv.id}
                     onClick={() => handleSelect(inv)}
                     className="hover:bg-gray-50 cursor-pointer transition-colors"
                   >
-                    <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">
+                    <td className="px-4 py-3 text-xs text-pdi-slate whitespace-nowrap">
                       {formatDate(inv.started_at)}
                     </td>
-                    <td className="px-4 py-3 text-gray-800 max-w-xs">
-                      <p className="truncate">{inv.question || <span className="text-gray-400 italic">—</span>}</p>
+                    <td className="px-4 py-3 text-pdi-granite max-w-xs">
+                      <p className="truncate">{inv.question || <span className="text-pdi-slate italic">—</span>}</p>
                     </td>
                     <td className="px-4 py-3">
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${sourceBadgeClass(inv.source)}`}>
@@ -367,22 +370,22 @@ export default function InvestigationHistory() {
                     <td className="px-4 py-3">
                       {statusBadge(inv.status)}
                     </td>
-                    <td className="px-4 py-3 text-xs text-gray-500 text-center">
+                    <td className="px-4 py-3 text-xs text-pdi-slate text-center">
                       {inv.tool_calls.length}
                     </td>
                     <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                       {confirmDeleteId === inv.id ? (
                         <div className="flex items-center justify-end gap-1">
-                          <span className="text-xs text-gray-600">Delete?</span>
+                          <span className="text-xs text-pdi-slate">Delete?</span>
                           <button
                             onClick={(e) => handleDeleteConfirmed(inv.id, e)}
-                            className="px-2 py-1 text-xs font-medium text-white bg-red-500 rounded hover:bg-red-600 transition-colors"
+                            className="px-2 py-1 text-xs font-medium text-white bg-pdi-orange rounded hover:bg-pdi-orange/90 transition-colors"
                           >
                             Yes
                           </button>
                           <button
                             onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(null) }}
-                            className="px-2 py-1 text-xs font-medium text-gray-600 bg-gray-100 rounded hover:bg-gray-200 transition-colors"
+                            className="px-2 py-1 text-xs font-medium text-pdi-slate bg-gray-100 rounded hover:bg-gray-200 transition-colors"
                           >
                             No
                           </button>
@@ -392,7 +395,7 @@ export default function InvestigationHistory() {
                           type="button"
                           onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(inv.id) }}
                           disabled={deleting === inv.id}
-                          className="p-1 text-gray-300 hover:text-red-500 transition-colors rounded disabled:opacity-40"
+                          className="p-1 text-pdi-slate/40 hover:text-pdi-orange transition-colors rounded disabled:opacity-40"
                           title="Delete"
                         >
                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
