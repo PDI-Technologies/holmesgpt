@@ -26,7 +26,7 @@ name: PDI — Deploy
 on:
   push:
     branches:
-      - main
+      - master
       - 'release/**'
     paths-ignore:
       - 'docs/**'
@@ -59,7 +59,7 @@ env:
 
 jobs:
   deploy:
-    name: Deploy to ${{ (github.ref == 'refs/heads/main' || github.event.inputs.environment == 'dev') && 'dev' || 'prod' }}
+    name: Deploy to ${{ (github.ref == 'refs/heads/master' || github.event.inputs.environment == 'dev') && 'dev' || 'prod' }}
     runs-on: ubuntu-latest
 
     # Use GitHub Environment for prod (enables protection rules and separate secrets)

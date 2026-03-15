@@ -1,13 +1,13 @@
 # OpenTofu IaC workflow for the PDI HolmesGPT infrastructure.
 #
 # Environments:
-#   dev  — <AWS_PROFILE>  (account <AWS_ACCOUNT_ID>)  — deploys on push to main
+#   dev  — <AWS_PROFILE>  (account <AWS_ACCOUNT_ID>)  — deploys on push to master
 #   prod — pdi-platform-production                    — deploys on push to release/** or workflow_dispatch
 #
 # On pull_request (infra/** changes):
 #   - Runs `tofu plan` for BOTH environments and posts the plan diff as a PR comment
 #
-# On push to main (infra/** changes):
+# On push to master (infra/** changes):
 #   - Runs `tofu apply` for dev only
 #
 # On push to release/** (infra/** changes):
@@ -68,10 +68,10 @@ on:
       - 'infra/**'
       - '!infra/frontend/**'   # Frontend code changes don't affect IaC
     branches:
-      - main
+      - master
   push:
     branches:
-      - main
+      - master
       - 'release/**'
     paths:
       - 'infra/**'
@@ -136,13 +136,13 @@ jobs:
             echo 'matrix={"include":[{"env":"prod"}]}' >> $GITHUB_OUTPUT
 
           else
-            # push to main: apply dev only
+            # push to master: apply dev only
             echo 'matrix={"include":[{"env":"dev"}]}' >> $GITHUB_OUTPUT
           fi
 
   # ── IaC plan/apply per environment ───────────────────────────────────────────
   iac:
-    name: OpenTofu ${{ matrix.env }} — ${{ (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release/'))) && 'apply' || (github.event.inputs.action == 'apply' && 'apply') || 'plan' }}
+    name: OpenTofu ${{ matrix.env }} — ${{ (github.event_name == 'push' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/heads/release/'))) && 'apply' || (github.event.inputs.action == 'apply' && 'apply') || 'plan' }}
     needs: setup
     runs-on: ubuntu-latest
     strategy:
@@ -154,7 +154,7 @@ jobs:
 
     env:
       IS_PROD: ${{ matrix.env == 'prod' }}
-      RUN_APPLY: ${{ (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release/'))) || github.event.inputs.action == 'apply' }}
+      RUN_APPLY: ${{ (github.event_name == 'push' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/heads/release/'))) || github.event.inputs.action == 'apply' }}
 
     permissions:
       contents: read
@@ -291,7 +291,7 @@ jobs:
               `\`\`\``,
               `</details>`,
               ``,
-              `> Plan generated from commit \`${context.sha.substring(0, 7)}\`. Apply will run automatically on merge to \`${ env === 'prod' ? 'release/**' : 'main' }\`.`,
+              `> Plan generated from commit \`${context.sha.substring(0, 7)}\`. Apply will run automatically on merge to \`${ env === 'prod' ? 'release/**' : 'master' }\`.`,
             ].join('\n');
 
             // Delete previous IaC plan comments for this env/PR
@@ -353,7 +353,7 @@ jobs:
             tail -20 /tmp/apply_output.txt >> $GITHUB_STEP_SUMMARY 2>/dev/null || true
             echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           else
-            APPLY_BRANCH=$([ "$ENV" = "prod" ] && echo "release/**" || echo "main")
+            APPLY_BRANCH=$([ "$ENV" = "prod" ] && echo "release/**" || echo "master")
             echo "### 📋 Plan only (merge to \`$APPLY_BRANCH\` to apply)" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "\`\`\`" >> $GITHUB_STEP_SUMMARY

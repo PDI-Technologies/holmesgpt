@@ -119,8 +119,8 @@ jobs:
               `  -n holmesgpt`,
               `\`\`\``,
               ``,
-              `> ⚠️ This is a PR image — it will be overwritten on next deploy to \`main\`.`,
-              `> To deploy to **prod**, merge to \`main\` then create a \`release/x.y.z\` branch.`,
+              `> ⚠️ This is a PR image — it will be overwritten on next deploy to \`master\`.`,
+              `> To deploy to **prod**, merge to \`master\` then create a \`release/x.y.z\` branch.`,
             ].join('\n');
 
             // Delete previous bot comments for this PR

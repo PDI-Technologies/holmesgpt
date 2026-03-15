@@ -24,7 +24,7 @@ on:
       - 'mkdocs.yml'
   push:
     branches:
-      - main
+      - master
       - 'release/**'
     paths-ignore:
       - 'docs/**'
