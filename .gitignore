@@ -182,9 +182,7 @@ infra/**/*.tfstate
 infra/**/*.tfstate.backup
 infra/**/*.tfplan
 infra/envs/*.auto.tfvars
-# Environment-specific tfvars and backend configs contain real account IDs, VPC IDs, etc.
-# Use the *.example template files and fill in your own values.
-infra/envs/*.tfvars
+# Backend configs contain real AWS profile names — gitignored, use *.example as template
 infra/envs/backend-*.hcl
 
 # Frontend build artifacts
