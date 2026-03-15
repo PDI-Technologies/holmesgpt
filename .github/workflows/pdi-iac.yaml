@@ -333,6 +333,16 @@ jobs:
 
       # ── Apply ─────────────────────────────────────────────────────────────────
 
+      - name: Verify AWS credentials before apply
+        if: env.RUN_APPLY == 'true' && env.HAVE_CREDS == 'true'
+        run: |
+          echo "=== AWS caller identity ==="
+          aws sts get-caller-identity
+          echo "=== aws eks get-token test ==="
+          aws eks get-token --cluster-name "holmesgpt-${{ matrix.env }}" --region ${{ env.AWS_REGION }} | head -c 200
+        env:
+          AWS_PROFILE: ""
+
       - name: OpenTofu apply (${{ matrix.env }})
         if: env.RUN_APPLY == 'true' && env.HAVE_CREDS == 'true'
         working-directory: infra
