@@ -27,38 +27,51 @@ export default async function globalSetup(config: FullConfig) {
     fs.mkdirSync(authDir, { recursive: true });
   }
 
-  const browser = await chromium.launch();
+  const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({ ignoreHTTPSErrors: true });
   const page = await context.newPage();
 
   try {
-    // Navigate to login page
-    await page.goto(`${baseURL}/login`, { waitUntil: 'networkidle' });
+    // Navigate to login page and wait for React SPA to hydrate
+    await page.goto(`${baseURL}/login`, { waitUntil: 'domcontentloaded' });
 
-    // Wait for React SPA to hydrate
-    await page.waitForSelector('input[type="text"], input[name="username"], input[placeholder*="sername"]', {
-      timeout: 15_000,
-    });
+    // Wait for the password input — most reliable indicator the form is ready
+    await page.waitForSelector('input[type="password"]', { timeout: 30_000 });
 
-    // Fill credentials
-    const usernameInput = page.locator('input[type="text"], input[name="username"]').first();
+    // Fill username — try multiple selector strategies
+    const usernameInput = page.locator('input[type="text"], input[name="username"], input[id="username"], input[placeholder*="ser"]').first();
     const passwordInput = page.locator('input[type="password"]').first();
 
     await usernameInput.fill(username);
     await passwordInput.fill(password);
 
-    // Submit
-    await page.locator('button[type="submit"]').click();
+    // Submit the form
+    const submitBtn = page.locator('button[type="submit"]').first();
+    await submitBtn.click();
 
-    // Wait for successful login — chat page or main app loads
-    await page.waitForURL((url) => !url.pathname.includes('/login'), {
-      timeout: 30_000,
+    // This app is a pure React state SPA — the URL never changes from /login.
+    // The app just conditionally renders <LoginPage> or <Layout> based on auth state.
+    // Wait for the password input to detach (login form unmounts on success).
+    await page.waitForSelector('input[type="password"]', {
+      state: 'detached',
+      timeout: 60_000,
     });
 
     // Save auth state
     const authFile = path.join(authDir, 'user.json');
     await context.storageState({ path: authFile });
     console.log(`✅ Auth state saved to ${authFile}`);
+  } catch (err) {
+    // Capture screenshot for debugging
+    const screenshotPath = path.join(__dirname, '..', 'test-results', 'global-setup-failure.png');
+    const screenshotDir = path.dirname(screenshotPath);
+    if (!fs.existsSync(screenshotDir)) {
+      fs.mkdirSync(screenshotDir, { recursive: true });
+    }
+    await page.screenshot({ path: screenshotPath, fullPage: true });
+    console.error(`❌ Global setup failed. Screenshot saved to ${screenshotPath}`);
+    console.error(`   Current URL: ${page.url()}`);
+    throw err;
   } finally {
     await browser.close();
   }

@@ -55,6 +55,6 @@ export class InvestigatePage {
   async expectPageLoaded() {
     await this.page.waitForLoadState('networkidle');
     // Investigate page should have some form elements or content
-    await expect(this.page.locator('main, [role="main"], form, textarea, input')).toBeVisible({ timeout: 10_000 });
+    await expect(this.page.locator('main, [role="main"], form, textarea, input').first()).toBeVisible({ timeout: 10_000 });
   }
 }

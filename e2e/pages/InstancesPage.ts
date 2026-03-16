@@ -19,7 +19,7 @@ export class InstancesPage {
 
   async expectPageLoaded() {
     await this.page.waitForLoadState('networkidle');
-    await expect(this.page.locator('main, [role="main"], h1, h2, [class*="instance"]')).toBeVisible({ timeout: 10_000 });
+    await expect(this.page.locator('main, [role="main"], h1, h2, [class*="instance"]').first()).toBeVisible({ timeout: 10_000 });
   }
 
   async getInstanceCount(): Promise<number> {

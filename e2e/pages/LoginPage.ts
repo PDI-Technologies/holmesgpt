@@ -12,7 +12,7 @@ export class LoginPage {
 
   constructor(page: Page) {
     this.page = page;
-    this.usernameInput = page.locator('input[type="text"], input[name="username"]').first();
+    this.usernameInput = page.locator('#username, input[type="text"], input[name="username"]').first();
     this.passwordInput = page.locator('input[type="password"]').first();
     this.submitButton = page.locator('button[type="submit"]').first();
     this.errorMessage = page.locator('[role="alert"], .error, [class*="error"]').first();
@@ -20,7 +20,8 @@ export class LoginPage {
 
   async goto() {
     await this.page.goto('/login');
-    await this.page.waitForLoadState('networkidle');
+    // Wait for React SPA to hydrate and render the form
+    await this.page.waitForSelector('input[type="password"]', { timeout: 15_000 });
   }
 
   async login(username: string, password: string) {
@@ -31,15 +32,20 @@ export class LoginPage {
 
   async loginAndWait(username: string, password: string) {
     await this.login(username, password);
-    await this.page.waitForURL((url) => !url.pathname.includes('/login'), {
+    // This app does NOT use URL routing — it's a pure React state SPA.
+    // The URL stays at /login forever; the app just swaps components.
+    // Wait for the login form to unmount (password input disappears)
+    // and the main app layout to appear (sidebar nav or chat textarea).
+    await this.page.waitForSelector('input[type="password"]', {
+      state: 'detached',
       timeout: 30_000,
     });
   }
 
   async expectLoginFormVisible() {
-    await expect(this.usernameInput).toBeVisible();
-    await expect(this.passwordInput).toBeVisible();
-    await expect(this.submitButton).toBeVisible();
+    await expect(this.usernameInput).toBeVisible({ timeout: 10_000 });
+    await expect(this.passwordInput).toBeVisible({ timeout: 10_000 });
+    await expect(this.submitButton).toBeVisible({ timeout: 10_000 });
   }
 
   async expectErrorVisible() {

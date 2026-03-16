@@ -23,7 +23,7 @@ export class HistoryPage {
 
   async expectPageLoaded() {
     await this.page.waitForLoadState('networkidle');
-    await expect(this.page.locator('main, [role="main"], h1, h2, table, [class*="history"]')).toBeVisible({ timeout: 10_000 });
+    await expect(this.page.locator('main, [role="main"], h1, h2, table, [class*="history"]').first()).toBeVisible({ timeout: 10_000 });
   }
 
   async getHistoryCount(): Promise<number> {
