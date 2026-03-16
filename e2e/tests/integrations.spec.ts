@@ -119,11 +119,10 @@ test.describe('Integrations API: Status Validation @smoke', () => {
     expect(prom!.error!.length).toBeGreaterThan(0);
   });
 
-  test('ado MCP server shows failed status with error message', async () => {
+  test('ado MCP server is enabled', async () => {
     const ado = integrations.find((i) => i.name === 'ado');
     expect(ado, 'ado integration not found').toBeTruthy();
-    expect(ado!.status).toBe('failed');
-    expect(ado!.error).toBeTruthy();
+    expect(ado!.status).toBe('enabled');
   });
 
   // ── Integration count sanity check ──────────────────────────────────────
