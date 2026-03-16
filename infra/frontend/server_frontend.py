@@ -1038,6 +1038,43 @@ def mount_frontend(app: FastAPI, config=None) -> None:
             logging.error("Failed to preview project %s: %s", project_id, e)
             raise HTTPException(status_code=500, detail=str(e))
 
+    @app.get("/api/projects/{project_id}/webhook-settings")
+    async def get_project_webhook_settings(project_id: str):
+        """Return resolved write-back settings for each webhook in a project.
+
+        For each webhook, returns the effective ``write_back_enabled`` value
+        (project override if set, otherwise global default) and whether the
+        value is a project-level override.
+        """
+        try:
+            from projects import get_store, get_webhook_settings_store  # noqa: PLC0415
+
+            p = get_store().get(project_id)
+            if not p:
+                raise HTTPException(status_code=404, detail="Project not found")
+
+            store = get_webhook_settings_store()
+            webhook_ids = ["pagerduty", "ado", "salesforce"]
+            result: dict[str, dict] = {}
+            for wh_id in webhook_ids:
+                global_val = store.get(wh_id).get("write_back_enabled", True)
+                override = (
+                    p.webhook_write_back.get(wh_id)
+                    if p.webhook_write_back
+                    else None
+                )
+                result[wh_id] = {
+                    "write_back_enabled": override if override is not None else global_val,
+                    "is_override": override is not None,
+                    "global_default": global_val,
+                }
+            return JSONResponse(result)
+        except HTTPException:
+            raise
+        except Exception as e:
+            logging.error("Failed to get webhook settings for project %s: %s", project_id, e)
+            raise HTTPException(status_code=500, detail=str(e))
+
     # ── Instances endpoints ────────────────────────────────────────────────────
 
     @app.get("/api/instances")
@@ -1686,7 +1723,7 @@ def mount_frontend(app: FastAPI, config=None) -> None:
 
                         _wb_enabled = (
                             get_webhook_settings_store()
-                            .get("pagerduty")
+                            .get("pagerduty", project_id=project_id or None)
                             .get("write_back_enabled", True)
                         )
                         pd_api_key = os.environ.get("PAGERDUTY_API_KEY", "")
@@ -1945,7 +1982,7 @@ def mount_frontend(app: FastAPI, config=None) -> None:
 
                     _wb_enabled = (
                         get_webhook_settings_store()
-                        .get("ado")
+                        .get("ado", project_id=project_id or None)
                         .get("write_back_enabled", True)
                     )
                     ado_pat = os.environ.get("ADO_PAT", "")
@@ -2204,7 +2241,7 @@ def mount_frontend(app: FastAPI, config=None) -> None:
 
                     _wb_enabled = (
                         get_webhook_settings_store()
-                        .get("salesforce")
+                        .get("salesforce", project_id=project_id or None)
                         .get("write_back_enabled", True)
                     )
                     sf_instance_url = os.environ.get(

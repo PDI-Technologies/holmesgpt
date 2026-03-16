@@ -69,6 +69,7 @@ class Project(BaseModel):
     name: str
     description: str = ""
     tag_filter: Optional[TagFilter] = None  # None = only global (untagged) instances
+    webhook_write_back: Optional[dict[str, bool]] = None  # per-webhook write-back overrides; None/missing key = inherit global
     created_at: str = ""
 
 
@@ -356,8 +357,21 @@ class WebhookSettingsStore:
             }
         return result
 
-    def get(self, webhook_id: str) -> dict:
-        """Return settings for a single webhook, with defaults if not stored."""
+    def get(self, webhook_id: str, project_id: Optional[str] = None) -> dict:
+        """Return settings for a single webhook, with defaults if not stored.
+
+        If *project_id* is given, check the project's ``webhook_write_back``
+        overrides first.  A missing key or ``None`` value means "inherit global".
+        """
+        # ── Project-level override ────────────────────────────────────────
+        if project_id:
+            p = get_store().get(project_id)
+            if p and p.webhook_write_back and webhook_id in p.webhook_write_back:
+                val = p.webhook_write_back[webhook_id]
+                if val is not None:
+                    return {"write_back_enabled": val}
+
+        # ── Global default ────────────────────────────────────────────────
         resp = _get_table().get_item(Key={"pk": "WEBHOOK_SETTINGS", "sk": webhook_id})
         item = resp.get("Item")
         if not item:

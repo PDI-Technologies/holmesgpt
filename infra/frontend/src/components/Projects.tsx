@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { api, type Project, type Instance, type TagFilter } from '../lib/api'
+import { api, type Project, type Instance, type TagFilter, type WebhookInfo } from '../lib/api'
 
 interface ProjectsProps {
   projects: Project[]
@@ -189,9 +189,14 @@ function ProjectModal({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [allInstances, setAllInstances] = useState<Instance[]>([])
+  const [webhookWriteBack, setWebhookWriteBack] = useState<Record<string, boolean | null>>(
+    project?.webhook_write_back ?? {}
+  )
+  const [webhooks, setWebhooks] = useState<WebhookInfo[]>([])
 
   useEffect(() => {
     api.listInstances().then(setAllInstances).catch(() => {})
+    api.getWebhooks().then((r) => setWebhooks(r.webhooks ?? [])).catch(() => {})
   }, [])
 
   const handleSave = async () => {
@@ -206,6 +211,7 @@ function ProjectModal({
         name: name.trim(),
         description: description.trim(),
         tag_filter: tagFilter,
+        webhook_write_back: Object.keys(webhookWriteBack).length > 0 ? webhookWriteBack : null,
       }
       if (project) {
         await api.updateProject(project.id, payload)
@@ -266,6 +272,68 @@ function ProjectModal({
             </label>
             <InstancePreviewPanel tagFilter={tagFilter} allInstances={allInstances} />
           </div>
+
+          {/* ── Write-Back Settings ─────────────────────────────────── */}
+          {webhooks.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-pdi-granite mb-1">
+                Write-Back Settings
+              </label>
+              <p className="text-xs text-pdi-slate mb-3">
+                Control whether Holmes writes investigation results back to each source system for this project.
+                "Inherit" uses the global default from the Integrations page.
+              </p>
+              <div className="space-y-3">
+                {webhooks.map((wh) => {
+                  const current = webhookWriteBack[wh.id] ?? null
+                  return (
+                    <div key={wh.id} className="flex items-center justify-between py-2 px-3 bg-gray-50 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-pdi-granite">{wh.name}</span>
+                        {!wh.write_back_capable && (
+                          <span className="text-xs text-pdi-slate bg-gray-200 px-1.5 py-0.5 rounded">
+                            credentials not configured
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {([
+                          { value: null, label: 'Inherit' },
+                          { value: true, label: 'Enabled' },
+                          { value: false, label: 'Disabled' },
+                        ] as const).map(({ value, label }) => (
+                          <button
+                            key={String(value)}
+                            type="button"
+                            onClick={() => {
+                              const next = { ...webhookWriteBack }
+                              if (value === null) {
+                                delete next[wh.id]
+                              } else {
+                                next[wh.id] = value
+                              }
+                              setWebhookWriteBack(next)
+                            }}
+                            className={`px-2.5 py-1 text-xs font-medium rounded-full border transition-colors ${
+                              current === value
+                                ? value === true
+                                  ? 'bg-emerald-500 text-white border-emerald-500'
+                                  : value === false
+                                    ? 'bg-pdi-orange text-white border-pdi-orange'
+                                    : 'bg-pdi-sky text-white border-pdi-sky'
+                                : 'bg-white text-pdi-slate border-pdi-cool-gray hover:border-pdi-sky'
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
           {error && <p className="text-sm text-pdi-orange">{error}</p>}
         </div>
         <div className="px-6 py-4 border-t border-pdi-cool-gray flex justify-end gap-3">

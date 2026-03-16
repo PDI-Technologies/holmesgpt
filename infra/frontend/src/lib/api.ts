@@ -197,6 +197,7 @@ export interface Project {
   name: string;
   description: string;
   tag_filter: TagFilter | null;
+  webhook_write_back: Record<string, boolean | null> | null;
   created_at: string;
 }
 
@@ -433,6 +434,10 @@ export const api = {
 
   previewProject(id: string): Promise<ProjectPreview> {
     return request(`/api/projects/${encodeURIComponent(id)}/preview`);
+  },
+
+  getProjectWebhookSettings(id: string): Promise<Record<string, { write_back_enabled: boolean; is_override: boolean; global_default: boolean }>> {
+    return request(`/api/projects/${encodeURIComponent(id)}/webhook-settings`);
   },
 
   listInstances(): Promise<Instance[]> {
