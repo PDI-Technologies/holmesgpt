@@ -23,13 +23,21 @@ test.describe('Functional: Chat UI @smoke', () => {
     // Send a question that requires real kubectl tool calls
     await chatPage.sendMessage('How many pods are running in the holmesgpt namespace? List their names.');
 
+    // Wait for loading to START (response begins streaming)
+    await page.waitForFunction(
+      () => {
+        const bodyText = document.body.innerText;
+        return bodyText.includes('Investigating') || bodyText.includes('loading');
+      },
+      { timeout: 15_000 }
+    ).catch(() => { /* loading indicator may flash too fast to catch */ });
+
     // Wait for the LLM response to complete — loading indicators disappear
     await page.waitForFunction(
       () => {
         const spinners = document.querySelectorAll(
-          '[class*="loading"], [class*="thinking"], [class*="spinner"], [class*="dots"], [class*="Investigating"]'
+          '[class*="loading"], [class*="thinking"], [class*="spinner"], [class*="dots"]'
         );
-        // Also check no "Investigating..." text is visible
         const bodyText = document.body.innerText;
         const stillLoading = bodyText.includes('Investigating...');
         return spinners.length === 0 && !stillLoading;
