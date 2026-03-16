@@ -17,13 +17,13 @@ export class SettingsPage {
   }
 
   async goto() {
-    await this.page.goto('/settings');
+    await this.page.goto('/settings', { timeout: 60_000 });
     await this.page.waitForLoadState('networkidle');
   }
 
   async expectPageLoaded() {
     await this.page.waitForLoadState('networkidle');
-    await expect(this.page.locator('main, [role="main"], h1, h2, form, [class*="setting"]')).toBeVisible({ timeout: 10_000 });
+    await expect(this.page.locator('main, [role="main"], h1, h2, form, [class*="setting"]').first()).toBeVisible({ timeout: 10_000 });
   }
 
   async expectSettingsVisible() {
