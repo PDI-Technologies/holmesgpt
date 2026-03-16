@@ -1,38 +1,25 @@
-# Post-deployment E2E smoke tests for HolmesGPT PDI.
+# Post-deployment E2E smoke tests for HolmesGPT PDI (dev only).
 #
 # Triggers:
-#   - After pdi-deploy.yaml completes (workflow_run) — automatic post-deploy gate
-#   - workflow_dispatch — manual trigger for any environment
+#   - After pdi-deploy.yaml completes on master — automatic post-deploy gate
+#   - workflow_dispatch — manual trigger for dev
 #
 # Required GitHub Secrets:
 #   PDI_DEV_HOLMES_UI_PASSWORD   — Holmes UI login password (dev)
-#   PDI_PROD_HOLMES_UI_PASSWORD  — Holmes UI login password (prod)
-#
-# Optional:
-#   BASE_URL override via workflow_dispatch input
 
 name: PDI — E2E Tests
 
 on:
-  # Run automatically after Deploy completes (Deploy builds image + rolls out pods)
+  # Run automatically after Deploy completes on master (dev deploys)
   workflow_run:
     workflows: ['PDI — Deploy']
     types: [completed]
     branches:
       - master
-      - 'release/**'
 
-  # Manual trigger for any environment
+  # Manual trigger — dev only
   workflow_dispatch:
     inputs:
-      environment:
-        description: 'Target environment'
-        required: true
-        default: 'dev'
-        type: choice
-        options:
-          - dev
-          - prod
       suite:
         description: 'Test suite to run'
         required: true
@@ -48,16 +35,15 @@ concurrency:
 
 jobs:
   e2e:
-    name: E2E ${{ github.event.inputs.suite || 'smoke' }} — ${{ github.event.inputs.environment || (github.ref == 'refs/heads/master' && 'dev') || 'prod' }}
+    name: E2E ${{ github.event.inputs.suite || 'smoke' }} — dev
     runs-on: ubuntu-latest
 
-    # Only run if the triggering IaC workflow succeeded (or manual dispatch)
+    # Only run if the triggering deploy succeeded (or manual dispatch)
     if: >
       github.event_name == 'workflow_dispatch' ||
       github.event.workflow_run.conclusion == 'success'
 
     env:
-      ENVIRONMENT: ${{ github.event.inputs.environment || (github.ref == 'refs/heads/master' && 'dev') || 'prod' }}
       SUITE: ${{ github.event.inputs.suite || 'smoke' }}
 
     steps:
@@ -68,13 +54,8 @@ jobs:
 
       - name: Set environment variables
         run: |
-          if [ "$ENVIRONMENT" = "prod" ]; then
-            echo "BASE_URL=https://holmesgpt.platform.pditechnologies.com" >> $GITHUB_ENV
-            echo "HOLMES_PASSWORD=${{ secrets.PDI_PROD_HOLMES_UI_PASSWORD }}" >> $GITHUB_ENV
-          else
-            echo "BASE_URL=https://holmesgpt.dev.platform.pditechnologies.com" >> $GITHUB_ENV
-            echo "HOLMES_PASSWORD=${{ secrets.PDI_DEV_HOLMES_UI_PASSWORD }}" >> $GITHUB_ENV
-          fi
+          echo "BASE_URL=https://holmesgpt.dev.platform.pditechnologies.com" >> $GITHUB_ENV
+          echo "HOLMES_PASSWORD=${{ secrets.PDI_DEV_HOLMES_UI_PASSWORD }}" >> $GITHUB_ENV
           echo "HOLMES_USERNAME=admin" >> $GITHUB_ENV
 
       - name: Setup Node.js
@@ -116,7 +97,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report-${{ env.ENVIRONMENT }}-${{ github.run_number }}
+          name: playwright-report-dev-${{ github.run_number }}
           path: e2e/playwright-report/
           retention-days: 14
 
@@ -124,14 +105,14 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-results-${{ env.ENVIRONMENT }}-${{ github.run_number }}
+          name: test-results-dev-${{ github.run_number }}
           path: e2e/test-results/
           retention-days: 7
 
       - name: E2E summary
         if: always()
         run: |
-          echo "## E2E Test Summary — \`$ENVIRONMENT\`" >> $GITHUB_STEP_SUMMARY
+          echo "## E2E Test Summary — \`dev\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- **Suite**: \`$SUITE\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Target**: \`$BASE_URL\`" >> $GITHUB_STEP_SUMMARY
