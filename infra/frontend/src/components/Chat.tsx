@@ -3,6 +3,7 @@ import { useChat } from '../hooks/useChat'
 import MessageBubble from './MessageBubble'
 import ToolCallCard from './ToolCallCard'
 import { api, AwsAccount } from '../lib/api'
+import SimilarInvestigationsPanel from './SimilarInvestigations'
 
 const K8S_SUGGESTIONS = [
   'List all pods with errors',
@@ -62,7 +63,8 @@ export default function Chat({ projectId }: ChatProps) {
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex h-full">
+    <div className="flex flex-col flex-1 min-w-0">
       {/* Header */}
       <div className="relative flex items-center justify-between px-6 py-4 border-b border-pdi-cool-gray bg-white">
         <div>
@@ -240,6 +242,8 @@ export default function Chat({ projectId }: ChatProps) {
           </button>
         </form>
       </div>
+    </div>
+    <SimilarInvestigationsPanel query={input} projectId={projectId ?? undefined} />
     </div>
   )
 }

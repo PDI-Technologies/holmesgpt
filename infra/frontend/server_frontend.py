@@ -1225,6 +1225,69 @@ def mount_frontend(app: FastAPI, config=None) -> None:
             logging.error("Failed to delete investigation %s: %s", investigation_id, e)
             raise HTTPException(status_code=500, detail=str(e))
 
+    @app.get("/api/investigations/similar")
+    async def similar_investigations(
+        q: str = "",
+        project_id: str = "",
+        limit: int = 5,
+    ):
+        """Find past investigations similar to the given query text."""
+        if not q.strip():
+            return JSONResponse([])
+        try:
+            from projects import get_investigation_store  # noqa: PLC0415
+
+            results = get_investigation_store().search_similar(
+                query=q,
+                project_id=project_id or None,
+                limit=limit,
+            )
+            return JSONResponse(results)
+        except Exception as e:
+            logging.error("Failed to search similar investigations: %s", e)
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @app.put("/api/investigations/{investigation_id}/feedback")
+    async def update_investigation_feedback(investigation_id: str, request: Request):
+        """Update feedback and optional resolution summary on an investigation.
+
+        Body: {"feedback": "helpful"|"not_helpful", "resolution_summary": "..."}
+        Only investigations marked "helpful" with a resolution_summary will be
+        injected into future LLM contexts.
+        """
+        try:
+            from projects import get_investigation_store  # noqa: PLC0415
+
+            body = await request.json()
+            feedback = body.get("feedback")
+            if feedback not in ("helpful", "not_helpful"):
+                raise HTTPException(
+                    status_code=400,
+                    detail='feedback must be "helpful" or "not_helpful"',
+                )
+            resolution_summary = body.get("resolution_summary")
+            inv = get_investigation_store().update_feedback(
+                investigation_id, feedback, resolution_summary
+            )
+            if not inv:
+                raise HTTPException(status_code=404, detail="Investigation not found")
+            return JSONResponse(
+                {
+                    "id": inv.id,
+                    "feedback": inv.feedback,
+                    "resolution_summary": inv.resolution_summary,
+                }
+            )
+        except HTTPException:
+            raise
+        except Exception as e:
+            logging.error(
+                "Failed to update feedback for investigation %s: %s",
+                investigation_id,
+                e,
+            )
+            raise HTTPException(status_code=500, detail=str(e))
+
     # ── Manual investigate endpoint ───────────────────────────────────────────
 
     @app.post("/api/investigate")
@@ -1314,6 +1377,37 @@ def mount_frontend(app: FastAPI, config=None) -> None:
             "Consolidate findings from all systems into a single comprehensive analysis. "
             "Identify root causes, correlations across systems, and provide clear recommended actions."
         )
+
+        # ── Inject similar past investigations into LLM context ───────────
+        try:
+            from projects import get_investigation_store as _get_inv_store  # noqa: PLC0415
+
+            similar = _get_inv_store().search_similar(
+                query=f"{title} {description}",
+                project_id=project_id or None,
+                limit=3,
+                min_score=0.3,
+            )
+            # Only inject user-approved investigations with resolution summaries
+            approved = [
+                s for s in similar
+                if s.get("feedback") == "helpful" and s.get("resolution_summary")
+            ]
+            if approved:
+                question += "\n\n## Similar Past Investigations (verified resolutions)\n\n"
+                question += (
+                    "The following past investigations were marked as helpful by the team. "
+                    "Consider this context but verify independently with current data.\n\n"
+                )
+                for i, s in enumerate(approved, 1):
+                    question += (
+                        f"### Past Investigation {i} (match: {s['score']:.0%}, source: {s['source']})\n"
+                        f"**Question:** {s['question']}\n"
+                        f"**Resolution:** {s['resolution_summary']}\n"
+                        f"**Tools used:** {', '.join(s['tools_used']) if s['tools_used'] else 'N/A'}\n\n"
+                    )
+        except Exception as e:
+            logging.warning("Failed to inject similar investigations: %s", e)
 
         # Result container shared between the worker thread and the SSE generator
         result_q: queue.Queue = queue.Queue()

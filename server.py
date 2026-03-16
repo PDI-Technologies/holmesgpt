@@ -590,8 +590,41 @@ def chat(chat_request: ChatRequest, http_request: Request):
             source = _extract_source_from_ask(chat_request.ask)
             ai = _make_scoped_ai(source)
         global_instructions = dal.get_global_instructions_for_account()
+
+        # ── Inject verified past resolutions into the first message ───────
+        enriched_ask = chat_request.ask
+        if not chat_request.conversation_history:
+            try:
+                from projects import get_investigation_store  # noqa: PLC0415
+
+                similar = get_investigation_store().search_similar(
+                    query=chat_request.ask,
+                    project_id=chat_request.project_id or None,
+                    limit=3,
+                    min_score=0.3,
+                )
+                approved = [
+                    s for s in similar
+                    if s.get("feedback") == "helpful" and s.get("resolution_summary")
+                ]
+                if approved:
+                    ctx = "\n\n## Similar Past Investigations (verified resolutions)\n\n"
+                    ctx += (
+                        "The following past investigations were marked as helpful by the team. "
+                        "Consider this context but verify independently with current data.\n\n"
+                    )
+                    for i, s in enumerate(approved, 1):
+                        ctx += (
+                            f"### Past Investigation {i} (match: {s['score']:.0%}, source: {s['source']})\n"
+                            f"**Question:** {s['question']}\n"
+                            f"**Resolution:** {s['resolution_summary']}\n\n"
+                        )
+                    enriched_ask = chat_request.ask + ctx
+            except Exception as e:
+                logging.warning("Failed to inject similar investigations into chat: %s", e)
+
         messages = build_chat_messages(
-            chat_request.ask,
+            enriched_ask,
             chat_request.conversation_history,
             ai=ai,
             config=config,

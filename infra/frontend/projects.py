@@ -468,6 +468,10 @@ class Investigation(BaseModel):
     status: str = "completed"
     # Error message if status == "failed"
     error: str = ""
+    # User feedback: "helpful" | "not_helpful" | None (unrated)
+    feedback: Optional[str] = None
+    # User-curated resolution summary (only injected into LLM when feedback == "helpful")
+    resolution_summary: Optional[str] = None
 
 
 class InvestigationStore:
@@ -543,6 +547,121 @@ class InvestigationStore:
             ReturnValues="ALL_OLD",
         )
         return bool(resp.get("Attributes"))
+
+    def update_feedback(
+        self,
+        investigation_id: str,
+        feedback: str,
+        resolution_summary: Optional[str] = None,
+    ) -> Optional[Investigation]:
+        """Update feedback and optional resolution summary on an investigation."""
+        inv = self.get(investigation_id)
+        if not inv:
+            return None
+        inv.feedback = feedback
+        if resolution_summary is not None:
+            inv.resolution_summary = resolution_summary
+        return self.save(inv)
+
+    def search_similar(
+        self,
+        query: str,
+        project_id: Optional[str] = None,
+        limit: int = 5,
+        min_score: float = 0.1,
+    ) -> list[dict]:
+        """Find completed investigations similar to *query* using keyword overlap.
+
+        Returns dicts with: id, question, answer_summary, source, started_at,
+        score, tools_used, feedback, resolution_summary.
+
+        Scoring:
+        - Keyword overlap between query and investigation question+answer
+        - Boost +0.15 for same project_id
+        - Boost +0.10 for feedback == "helpful"
+        - Recency decay: investigations older than 90 days get 0.8x multiplier
+        """
+        import math
+        import re
+        from datetime import datetime, timezone
+
+        _STOPWORDS = frozenset(
+            "the a an is are was were be been being have has had do does did "
+            "will would shall should may might can could of in to for on with "
+            "at by from as into through during before after above below between "
+            "and or but not no nor so yet both either neither each every all "
+            "any few more most other some such than too very it its this that "
+            "these those i me my we our you your he him his she her they them "
+            "their what which who whom how when where why".split()
+        )
+
+        def _tokenize(text: str) -> set[str]:
+            words = re.findall(r"[a-z0-9]+", text.lower())
+            return {w for w in words if w not in _STOPWORDS and len(w) > 1}
+
+        query_tokens = _tokenize(query)
+        if not query_tokens:
+            return []
+
+        # Load all completed investigations
+        all_inv = self.list(limit=200)
+        completed = [i for i in all_inv if i.status == "completed" and i.question]
+
+        now = datetime.now(timezone.utc)
+        results: list[dict] = []
+
+        for inv in completed:
+            inv_tokens = _tokenize(inv.question + " " + inv.answer[:1000])
+            if not inv_tokens:
+                continue
+
+            # Jaccard-like overlap score
+            overlap = query_tokens & inv_tokens
+            if not overlap:
+                continue
+            score = len(overlap) / math.sqrt(len(query_tokens) * len(inv_tokens))
+
+            # Boost for same project
+            if project_id and inv.project_id == project_id:
+                score += 0.15
+
+            # Boost for user-approved investigations
+            if inv.feedback == "helpful":
+                score += 0.10
+
+            # Recency decay: older than 90 days gets 0.8x
+            try:
+                inv_time = datetime.fromisoformat(inv.started_at.replace("Z", "+00:00"))
+                age_days = (now - inv_time).days
+                if age_days > 90:
+                    score *= 0.8
+            except (ValueError, AttributeError):
+                pass
+
+            if score < min_score:
+                continue
+
+            # Truncate answer for summary
+            answer_summary = inv.resolution_summary or inv.answer[:500]
+            if len(answer_summary) > 500:
+                answer_summary = answer_summary[:497] + "..."
+
+            results.append(
+                {
+                    "id": inv.id,
+                    "question": inv.question,
+                    "answer_summary": answer_summary,
+                    "source": inv.source,
+                    "started_at": inv.started_at,
+                    "score": round(min(score, 1.0), 2),
+                    "tools_used": list({tc.tool_name for tc in inv.tool_calls}),
+                    "feedback": inv.feedback,
+                    "resolution_summary": inv.resolution_summary,
+                }
+            )
+
+        results.sort(key=lambda r: r["score"], reverse=True)
+        return results[:limit]
 
 
 _investigation_store = InvestigationStore()

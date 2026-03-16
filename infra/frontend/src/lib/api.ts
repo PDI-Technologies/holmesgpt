@@ -226,6 +226,20 @@ export interface Investigation {
   project_id: string;
   status: 'running' | 'completed' | 'failed';
   error: string;
+  feedback: string | null;
+  resolution_summary: string | null;
+}
+
+export interface SimilarInvestigation {
+  id: string;
+  question: string;
+  answer_summary: string;
+  source: string;
+  started_at: string;
+  score: number;
+  tools_used: string[];
+  feedback: string | null;
+  resolution_summary: string | null;
 }
 
 export const api = {
@@ -484,6 +498,20 @@ export const api = {
   deleteInvestigation(id: string): Promise<{ ok: boolean }> {
     return request(`/api/investigations/${encodeURIComponent(id)}`, {
       method: 'DELETE',
+    });
+  },
+
+  getSimilarInvestigations(query: string, projectId?: string, limit?: number): Promise<SimilarInvestigation[]> {
+    const qs = new URLSearchParams({ q: query });
+    if (projectId) qs.set('project_id', projectId);
+    if (limit) qs.set('limit', String(limit));
+    return request(`/api/investigations/similar?${qs.toString()}`);
+  },
+
+  updateInvestigationFeedback(id: string, feedback: 'helpful' | 'not_helpful', resolutionSummary?: string): Promise<{ id: string; feedback: string; resolution_summary: string | null }> {
+    return request(`/api/investigations/${encodeURIComponent(id)}/feedback`, {
+      method: 'PUT',
+      body: JSON.stringify({ feedback, resolution_summary: resolutionSummary }),
     });
   },
 
