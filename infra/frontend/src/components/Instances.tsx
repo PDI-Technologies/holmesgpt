@@ -255,7 +255,7 @@ function InstanceFormDialog({
   )
 }
 
-export default function Instances() {
+export default function Instances({ selectedProjectId }: { selectedProjectId: string | null }) {
   const [instances, setInstances] = useState<Instance[]>([])
   const [loading, setLoading] = useState(true)
   const [editingInstance, setEditingInstance] = useState<Instance | null | undefined>(undefined)
@@ -264,13 +264,20 @@ export default function Instances() {
 
   const load = () => {
     setLoading(true)
-    api.listInstances()
-      .then((data) => setInstances(data ?? []))
-      .catch(() => setInstances([]))
-      .finally(() => setLoading(false))
+    if (selectedProjectId) {
+      api.previewProject(selectedProjectId)
+        .then((preview) => setInstances(preview.resolved_instances ?? []))
+        .catch(() => setInstances([]))
+        .finally(() => setLoading(false))
+    } else {
+      api.listInstances()
+        .then((data) => setInstances(data ?? []))
+        .catch(() => setInstances([]))
+        .finally(() => setLoading(false))
+    }
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [selectedProjectId])
 
   const handleDeleteConfirmed = async (id: string) => {
     setConfirmDeleteId(null)

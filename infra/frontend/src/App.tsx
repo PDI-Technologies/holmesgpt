@@ -62,7 +62,7 @@ export default function App() {
         {page === 'integrations' && <Integrations />}
         {page === 'settings' && <Settings />}
         {page === 'projects' && <Projects projects={projects} onReload={reloadProjects} />}
-        {page === 'instances' && <Instances />}
+        {page === 'instances' && <Instances selectedProjectId={selectedProjectId} />}
         {page === 'docs' && <Docs />}
       </div>
     </Layout>
