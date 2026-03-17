@@ -604,11 +604,14 @@ def chat(chat_request: ChatRequest, http_request: Request):
                     min_score=0.3,
                 )
                 approved = [
-                    s for s in similar
+                    s
+                    for s in similar
                     if s.get("feedback") == "helpful" and s.get("resolution_summary")
                 ]
                 if approved:
-                    ctx = "\n\n## Similar Past Investigations (verified resolutions)\n\n"
+                    ctx = (
+                        "\n\n## Similar Past Investigations (verified resolutions)\n\n"
+                    )
                     ctx += (
                         "The following past investigations were marked as helpful by the team. "
                         "Consider this context but verify independently with current data.\n\n"
@@ -621,7 +624,9 @@ def chat(chat_request: ChatRequest, http_request: Request):
                         )
                     enriched_ask = chat_request.ask + ctx
             except Exception as e:
-                logging.warning("Failed to inject similar investigations into chat: %s", e)
+                logging.warning(
+                    "Failed to inject similar investigations into chat: %s", e
+                )
 
         messages = build_chat_messages(
             enriched_ask,
