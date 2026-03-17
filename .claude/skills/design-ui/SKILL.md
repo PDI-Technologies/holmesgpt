@@ -5,14 +5,14 @@ Design and build features for the HolmesGPT custom React frontend.
 ## Frontend Architecture
 
 **Stack**: React 18 + TypeScript + Tailwind CSS + Vite
-**Location**: `infra/frontend/src/`
+**Location**: `frontend/src/`
 **Build**: `infra/Dockerfile.frontend` (Node build → served by FastAPI)
-**Dev server**: `cd infra/frontend && npm run dev` (proxies `/api/*` to backend on port 5000)
+**Dev server**: `cd frontend && npm run dev` (proxies `/api/*` to backend on port 5000)
 
 ### File Structure
 
 ```
-infra/frontend/src/
+frontend/src/
 ├── App.tsx                    # Root: auth check, page routing (chat/investigate/integrations/settings/projects)
 ├── main.tsx                   # React entry point
 ├── lib/
@@ -505,7 +505,7 @@ function IncidentReportCard({ report }: { report: IncidentReport }) {
    { page: 'newpage', label: 'New Page', icon: 'M12 9v3.75m-9.303 3.376c...' },
    ```
 
-3. Create `infra/frontend/src/components/NewPage.tsx`
+3. Create `frontend/src/components/NewPage.tsx`
 
 4. Add the route in `App.tsx`:
    ```tsx
@@ -526,13 +526,13 @@ The Projects feature (added 2026-03) lets users group integration instances per 
 
 | File | Purpose |
 |---|---|
-| `infra/frontend/src/components/Projects.tsx` | CRUD UI: list cards, create/edit modal, `InstanceEditor` component |
-| `infra/frontend/src/hooks/useProject.ts` | Loads `/api/projects`, persists `selectedProjectId` to `localStorage` |
-| `infra/frontend/src/components/Layout.tsx` | Project selector `<select>` between logo and nav |
-| `infra/frontend/src/components/Chat.tsx` | Accepts `projectId` prop, passes to `useChat` |
-| `infra/frontend/src/hooks/useChat.ts` | Sends `project_id` in request body; clears history on project switch |
-| `infra/frontend/src/lib/api.ts` | `ToolsetInstance`, `Project`, `ProjectsResponse` types; CRUD methods |
-| `infra/frontend/projects.py` | Backend: DynamoDB-backed `ProjectsStore`, `build_project_tool_executor` |
+| `frontend/src/components/Projects.tsx` | CRUD UI: list cards, create/edit modal, `InstanceEditor` component |
+| `frontend/src/hooks/useProject.ts` | Loads `/api/projects`, persists `selectedProjectId` to `localStorage` |
+| `frontend/src/components/Layout.tsx` | Project selector `<select>` between logo and nav |
+| `frontend/src/components/Chat.tsx` | Accepts `projectId` prop, passes to `useChat` |
+| `frontend/src/hooks/useChat.ts` | Sends `project_id` in request body; clears history on project switch |
+| `frontend/src/lib/api.ts` | `ToolsetInstance`, `Project`, `ProjectsResponse` types; CRUD methods |
+| `frontend/projects.py` | Backend: DynamoDB-backed `ProjectsStore`, `build_project_tool_executor` |
 
 ### ToolsetInstance model
 
@@ -575,7 +575,7 @@ const { projects, selectedProjectId, selectedProject, selectProject, reloadProje
 
 ```bash
 # Start frontend dev server (hot reload, proxies to backend)
-cd infra/frontend
+cd frontend
 npm install
 npm run dev
 # → http://localhost:5173
@@ -584,8 +584,8 @@ npm run dev
 cd /path/to/holmesgpt-pdi
 poetry run python -m holmes.main serve --port 5000
 
-# Build for production (output goes to infra/frontend/dist/)
-cd infra/frontend
+# Build for production (output goes to frontend/dist/)
+cd frontend
 npm run build
 
 # Type check

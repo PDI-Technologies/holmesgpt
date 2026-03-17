@@ -4,9 +4,9 @@
 # Stage 1: Build React frontend
 FROM node:20-alpine AS frontend-builder
 WORKDIR /frontend
-COPY infra/frontend/package.json infra/frontend/package-lock.json infra/frontend/.npmrc ./
+COPY frontend/package.json frontend/package-lock.json frontend/.npmrc ./
 RUN npm ci --no-audit
-COPY infra/frontend/ ./
+COPY frontend/ ./
 RUN npm run build
 
 # Stage 2: Build Holmes (reuse the existing Dockerfile logic)
@@ -144,8 +144,8 @@ COPY ./holmes_cli.py /app/holmes_cli.py
 COPY --from=frontend-builder /frontend/dist /app/static
 
 # Copy frontend server extension (auth + static serving)
-COPY ./infra/frontend/server_frontend.py /app/server_frontend.py
-COPY ./infra/frontend/server_with_frontend.py /app/server_with_frontend.py
-COPY ./infra/frontend/projects.py /app/projects.py
+COPY ./frontend/server_frontend.py /app/server_frontend.py
+COPY ./frontend/server_with_frontend.py /app/server_with_frontend.py
+COPY ./frontend/projects.py /app/projects.py
 
 ENTRYPOINT ["python", "server_with_frontend.py"]

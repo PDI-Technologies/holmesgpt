@@ -44,7 +44,7 @@ class Project(BaseModel):
 | `PROJECT#<id>` | `META` | JSON-serialised Project |
 | `LLM_OVERRIDE` | `<toolset_name>` | LLM instructions string |
 
-### Tool executor scoping logic (`infra/frontend/projects.py`)
+### Tool executor scoping logic (`frontend/projects.py`)
 
 | Instance type | Condition | Behaviour |
 |---|---|---|
@@ -177,7 +177,7 @@ If you add a new Python toolset (e.g. `datadog/metrics`) and want it to be proje
        super().__init__(name=name, ...)
    ```
 
-3. **Add to `TOOLSET_TYPES`** in `infra/frontend/src/components/Projects.tsx`:
+3. **Add to `TOOLSET_TYPES`** in `frontend/src/components/Projects.tsx`:
    ```typescript
    const TOOLSET_TYPES = [
      ...
@@ -187,7 +187,7 @@ If you add a new Python toolset (e.g. `datadog/metrics`) and want it to be proje
 
 If you add a new MCP server type:
 
-1. **Add to `_MCP_TOOLSET_TYPES`** in `infra/frontend/projects.py`:
+1. **Add to `_MCP_TOOLSET_TYPES`** in `frontend/projects.py`:
    ```python
    _MCP_TOOLSET_TYPES = {"ado", "atlassian", "salesforce", "my-new-mcp"}
    ```

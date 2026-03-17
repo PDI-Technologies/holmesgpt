@@ -20,11 +20,11 @@ Before writing any code, read the files most relevant to your change:
 ```
 
 Key files:
-- `infra/frontend/src/App.tsx` — page routing
-- `infra/frontend/src/components/Layout.tsx` — sidebar nav
-- `infra/frontend/src/lib/api.ts` — all API calls and TypeScript interfaces
-- `infra/frontend/src/hooks/useChat.ts` — hook pattern reference
-- `infra/frontend/tailwind.config.ts` — PDI color palette
+- `frontend/src/App.tsx` — page routing
+- `frontend/src/components/Layout.tsx` — sidebar nav
+- `frontend/src/lib/api.ts` — all API calls and TypeScript interfaces
+- `frontend/src/hooks/useChat.ts` — hook pattern reference
+- `frontend/tailwind.config.ts` — PDI color palette
 
 ## Step 3: Follow the Design System
 
@@ -93,7 +93,7 @@ Empty state:
 
 1. Add to `App.tsx` type: `export type Page = 'chat' | 'investigate' | 'integrations' | 'projects' | 'settings' | 'newpage'`
 2. Add nav item to `Layout.tsx` navItems array with SVG path from Heroicons
-3. Create `infra/frontend/src/components/NewPage.tsx`
+3. Create `frontend/src/components/NewPage.tsx`
 4. Add route in `App.tsx`: `{page === 'newpage' && <NewPage />}`
 5. Add API methods to `lib/api.ts` if needed
 6. Create hook in `hooks/useNewPage.ts` if state management is needed
@@ -102,7 +102,7 @@ Existing pages for reference: `chat`, `investigate`, `integrations`, `projects` 
 
 ### Adding a component
 
-Create `infra/frontend/src/components/MyComponent.tsx`:
+Create `frontend/src/components/MyComponent.tsx`:
 ```tsx
 interface MyComponentProps {
   // typed props
@@ -187,7 +187,7 @@ Do NOT add new npm packages for:
 - Charts (use CSS/SVG directly or a minimal library already in package.json)
 - Date formatting (use `toLocaleString()`)
 
-Check `infra/frontend/package.json` for what's already available before adding anything.
+Check `frontend/package.json` for what's already available before adding anything.
 
 ## Step 6: TypeScript
 
@@ -199,7 +199,7 @@ Check `infra/frontend/package.json` for what's already available before adding a
 ## Step 7: Test Manually
 
 ```bash
-cd infra/frontend
+cd frontend
 npm run dev
 # Open http://localhost:5173
 # Navigate to the new page/feature
@@ -209,7 +209,7 @@ npm run dev
 ## Step 8: Build Check
 
 ```bash
-cd infra/frontend
+cd frontend
 npm run build
 # Must complete with no TypeScript errors
 ```

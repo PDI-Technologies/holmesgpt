@@ -12,9 +12,9 @@ Auth: admin / <HOLMESGPT_ADMIN_PASSWORD>
 ```
 
 The deployment uses a **custom Docker image** (`infra/Dockerfile.frontend`) that bundles:
-- The React frontend (built from `infra/frontend/`)
+- The React frontend (built from `frontend/`)
 - The Holmes Python backend (`server.py`)
-- Auth middleware (`infra/frontend/server_frontend.py`)
+- Auth middleware (`frontend/server_frontend.py`)
 
 ---
 
@@ -227,10 +227,10 @@ If empty, the `npm run build` step in `Dockerfile.frontend` failed. Check Docker
 | File | Purpose |
 |---|---|
 | `infra/Dockerfile.frontend` | Multi-stage Docker build (React + Holmes + auth) |
-| `infra/frontend/` | React SPA source code |
-| `infra/frontend/server_frontend.py` | Auth middleware + static file serving + projects/LLM-instructions API |
-| `infra/frontend/server_with_frontend.py` | Entrypoint that wraps `server.py` |
-| `infra/frontend/projects.py` | DynamoDB-backed ProjectsStore, LLMInstructionsStore, build_project_tool_executor |
+| `frontend/` | React SPA source code |
+| `frontend/server_frontend.py` | Auth middleware + static file serving + projects/LLM-instructions API |
+| `frontend/server_with_frontend.py` | Entrypoint that wraps `server.py` |
+| `frontend/projects.py` | DynamoDB-backed ProjectsStore, LLMInstructionsStore, build_project_tool_executor |
 | `infra/helm.tf` | Helm release configuration (main app config, MCP servers, AWS multi-account) |
 | `infra/dynamodb.tf` | DynamoDB table `holmesgpt-dev-config` (projects + LLM overrides) |
 | `infra/iam.tf` | IRSA policies: Secrets Manager + DynamoDB + wildcard project secrets |

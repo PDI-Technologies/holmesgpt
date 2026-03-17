@@ -205,7 +205,7 @@ class MyServiceToolset(Toolset):
         super().__init__(name=name, ...)
 ```
 
-Also add to `TOOLSET_TYPES` array in `infra/frontend/src/components/Projects.tsx`.
+Also add to `TOOLSET_TYPES` array in `frontend/src/components/Projects.tsx`.
 
 This enables the `basename:suffix` multi-instance pattern (e.g. `myservice/core:team-a`, `myservice/core:team-b`) and per-project Secrets Manager credential fetching. See the `manage-projects` skill for full details.
 

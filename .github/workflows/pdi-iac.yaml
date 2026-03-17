@@ -68,7 +68,7 @@ on:
   pull_request:
     paths:
       - 'infra/**'
-      - '!infra/frontend/**'   # Frontend code changes don't affect IaC
+      - '!frontend/**'   # Frontend code changes don't affect IaC
     branches:
       - master
   push:
@@ -77,7 +77,7 @@ on:
       - 'release/**'
     paths:
       - 'infra/**'
-      - '!infra/frontend/**'
+      - '!frontend/**'
   workflow_dispatch:
     inputs:
       environment:

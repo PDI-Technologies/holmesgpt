@@ -81,7 +81,7 @@ def _save_investigation(
         import sys as _sys
         import os as _os
 
-        _frontend_dir = _os.path.join(_os.path.dirname(__file__), "infra", "frontend")
+        _frontend_dir = _os.path.join(_os.path.dirname(__file__), "frontend")
         if _frontend_dir not in _sys.path:
             _sys.path.insert(0, _frontend_dir)
         from projects import get_investigation_store, Investigation, ToolCallRecord  # type: ignore  # noqa: PLC0415
@@ -514,12 +514,12 @@ def chat(chat_request: ChatRequest, http_request: Request):
         storage = tool_result_storage()
         tool_results_dir = storage.__enter__()
 
-        # Ensure infra/frontend is on sys.path so we can import shared helpers
+        # Ensure frontend is on sys.path so we can import shared helpers
         import sys
         import os as _os
         import re as _re
 
-        _frontend_dir = _os.path.join(_os.path.dirname(__file__), "infra", "frontend")
+        _frontend_dir = _os.path.join(_os.path.dirname(__file__), "frontend")
         if _frontend_dir not in sys.path:
             sys.path.insert(0, _frontend_dir)
 
