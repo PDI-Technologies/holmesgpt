@@ -1059,12 +1059,12 @@ def mount_frontend(app: FastAPI, config=None) -> None:
             for wh_id in webhook_ids:
                 global_val = store.get(wh_id).get("write_back_enabled", True)
                 override = (
-                    p.webhook_write_back.get(wh_id)
-                    if p.webhook_write_back
-                    else None
+                    p.webhook_write_back.get(wh_id) if p.webhook_write_back else None
                 )
                 result[wh_id] = {
-                    "write_back_enabled": override if override is not None else global_val,
+                    "write_back_enabled": override
+                    if override is not None
+                    else global_val,
                     "is_override": override is not None,
                     "global_default": global_val,
                 }
@@ -1072,7 +1072,9 @@ def mount_frontend(app: FastAPI, config=None) -> None:
         except HTTPException:
             raise
         except Exception as e:
-            logging.error("Failed to get webhook settings for project %s: %s", project_id, e)
+            logging.error(
+                "Failed to get webhook settings for project %s: %s", project_id, e
+            )
             raise HTTPException(status_code=500, detail=str(e))
 
     # ── Instances endpoints ────────────────────────────────────────────────────
@@ -1177,11 +1179,14 @@ def mount_frontend(app: FastAPI, config=None) -> None:
                 raise HTTPException(status_code=404, detail="Instance not found")
             if inst.type != "aws_api" or not inst.aws_role_arn:
                 raise HTTPException(
-                    status_code=400, detail="Instance is not an AWS type or has no Role ARN"
+                    status_code=400,
+                    detail="Instance is not an AWS type or has no Role ARN",
                 )
 
             # Attempt AssumeRole to validate the cross-account trust
-            sts = _boto3.client("sts", region_name=os.environ.get("AWS_REGION", "us-east-1"))
+            sts = _boto3.client(
+                "sts", region_name=os.environ.get("AWS_REGION", "us-east-1")
+            )
             try:
                 resp = sts.assume_role(
                     RoleArn=inst.aws_role_arn,
@@ -1211,7 +1216,9 @@ def mount_frontend(app: FastAPI, config=None) -> None:
         except HTTPException:
             raise
         except Exception as e:
-            logging.error("Failed to test connection for instance %s: %s", instance_id, e)
+            logging.error(
+                "Failed to test connection for instance %s: %s", instance_id, e
+            )
             raise HTTPException(status_code=500, detail=str(e))
 
     # ── Investigation history endpoints ────────────────────────────────────────
@@ -1444,11 +1451,14 @@ def mount_frontend(app: FastAPI, config=None) -> None:
             )
             # Only inject user-approved investigations with resolution summaries
             approved = [
-                s for s in similar
+                s
+                for s in similar
                 if s.get("feedback") == "helpful" and s.get("resolution_summary")
             ]
             if approved:
-                question += "\n\n## Similar Past Investigations (verified resolutions)\n\n"
+                question += (
+                    "\n\n## Similar Past Investigations (verified resolutions)\n\n"
+                )
                 question += (
                     "The following past investigations were marked as helpful by the team. "
                     "Consider this context but verify independently with current data.\n\n"

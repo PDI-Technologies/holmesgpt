@@ -65,7 +65,9 @@ class Instance(BaseModel):
     aws_account_name: Optional[str] = None
     aws_account_id: Optional[str] = None
     aws_role_arn: Optional[str] = None
-    aws_connection_status: Optional[str] = None  # "success", "error", or None (untested)
+    aws_connection_status: Optional[str] = (
+        None  # "success", "error", or None (untested)
+    )
     aws_connection_error: Optional[str] = None
     created_at: str = ""
 
@@ -75,7 +77,9 @@ class Project(BaseModel):
     name: str
     description: str = ""
     tag_filter: Optional[TagFilter] = None  # None = only global (untagged) instances
-    webhook_write_back: Optional[dict[str, bool]] = None  # per-webhook write-back overrides; None/missing key = inherit global
+    webhook_write_back: Optional[dict[str, bool]] = (
+        None  # per-webhook write-back overrides; None/missing key = inherit global
+    )
     created_at: str = ""
 
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { api, type Instance, type TestConnectionResponse } from '../lib/api'
 
 const TOOLSET_TYPES = [
@@ -376,7 +376,7 @@ export default function Instances({ selectedProjectId }: { selectedProjectId: st
   const [deleting, setDeleting] = useState<string | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
-  const load = () => {
+  const load = useCallback(() => {
     setLoading(true)
     if (selectedProjectId) {
       api.previewProject(selectedProjectId)
@@ -389,9 +389,9 @@ export default function Instances({ selectedProjectId }: { selectedProjectId: st
         .catch(() => setInstances([]))
         .finally(() => setLoading(false))
     }
-  }
+  }, [selectedProjectId])
 
-  useEffect(() => { load() }, [selectedProjectId])
+  useEffect(() => { load() }, [load])
 
   const handleDeleteConfirmed = async (id: string) => {
     setConfirmDeleteId(null)
