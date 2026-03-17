@@ -3,6 +3,7 @@ import { useInvestigate } from '../hooks/useInvestigate'
 import MessageBubble from './MessageBubble'
 import ToolCallCard from './ToolCallCard'
 import { api, AwsAccount, type Project } from '../lib/api'
+import SimilarInvestigationsPanel from './SimilarInvestigations'
 
 const SOURCES = ['Manual', 'AlertManager', 'PagerDuty', 'Jira', 'OpsGenie', 'Salesforce', 'Azure DevOps', 'AWS CloudWatch']
 
@@ -40,7 +41,8 @@ export default function Investigate({ projectId, selectedProject }: { projectId?
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex h-full">
+    <div className="flex flex-col flex-1 min-w-0">
       {/* Header */}
       <div className="relative flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-white">
         <div>
@@ -262,6 +264,8 @@ export default function Investigate({ projectId, selectedProject }: { projectId?
           )}
         </div>
       </div>
+    </div>
+    <SimilarInvestigationsPanel query={`${title} ${description}`} projectId={projectId ?? undefined} />
     </div>
   )
 }

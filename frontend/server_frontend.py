@@ -1038,6 +1038,45 @@ def mount_frontend(app: FastAPI, config=None) -> None:
             logging.error("Failed to preview project %s: %s", project_id, e)
             raise HTTPException(status_code=500, detail=str(e))
 
+    @app.get("/api/projects/{project_id}/webhook-settings")
+    async def get_project_webhook_settings(project_id: str):
+        """Return resolved write-back settings for each webhook in a project.
+
+        For each webhook, returns the effective ``write_back_enabled`` value
+        (project override if set, otherwise global default) and whether the
+        value is a project-level override.
+        """
+        try:
+            from projects import get_store, get_webhook_settings_store  # noqa: PLC0415
+
+            p = get_store().get(project_id)
+            if not p:
+                raise HTTPException(status_code=404, detail="Project not found")
+
+            store = get_webhook_settings_store()
+            webhook_ids = ["pagerduty", "ado", "salesforce"]
+            result: dict[str, dict] = {}
+            for wh_id in webhook_ids:
+                global_val = store.get(wh_id).get("write_back_enabled", True)
+                override = (
+                    p.webhook_write_back.get(wh_id) if p.webhook_write_back else None
+                )
+                result[wh_id] = {
+                    "write_back_enabled": override
+                    if override is not None
+                    else global_val,
+                    "is_override": override is not None,
+                    "global_default": global_val,
+                }
+            return JSONResponse(result)
+        except HTTPException:
+            raise
+        except Exception as e:
+            logging.error(
+                "Failed to get webhook settings for project %s: %s", project_id, e
+            )
+            raise HTTPException(status_code=500, detail=str(e))
+
     # ── Instances endpoints ────────────────────────────────────────────────────
 
     @app.get("/api/instances")
@@ -1067,6 +1106,9 @@ def mount_frontend(app: FastAPI, config=None) -> None:
                 secret_arn=body.get("secret_arn"),
                 mcp_url=body.get("mcp_url"),
                 aws_accounts=body.get("aws_accounts"),
+                aws_account_name=body.get("aws_account_name"),
+                aws_account_id=body.get("aws_account_id"),
+                aws_role_arn=body.get("aws_role_arn"),
             )
             return JSONResponse(inst.model_dump(), status_code=201)
         except KeyError as e:
@@ -1121,6 +1163,62 @@ def mount_frontend(app: FastAPI, config=None) -> None:
             raise
         except Exception as e:
             logging.error("Failed to delete instance %s: %s", instance_id, e)
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @app.post("/api/instances/{instance_id}/test-connection")
+    async def test_instance_connection(instance_id: str):
+        """Test AWS cross-account connection by attempting STS AssumeRole."""
+        try:
+            import boto3 as _boto3  # noqa: PLC0415
+
+            from projects import get_instances_store  # noqa: PLC0415
+
+            store = get_instances_store()
+            inst = store.get(instance_id)
+            if not inst:
+                raise HTTPException(status_code=404, detail="Instance not found")
+            if inst.type != "aws_api" or not inst.aws_role_arn:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Instance is not an AWS type or has no Role ARN",
+                )
+
+            # Attempt AssumeRole to validate the cross-account trust
+            sts = _boto3.client(
+                "sts", region_name=os.environ.get("AWS_REGION", "us-east-1")
+            )
+            try:
+                resp = sts.assume_role(
+                    RoleArn=inst.aws_role_arn,
+                    RoleSessionName="holmesgpt-connection-test",
+                    DurationSeconds=900,
+                )
+                caller = resp["AssumedRoleUser"]["Arn"]
+                # Update instance with success status
+                store.update(
+                    instance_id,
+                    aws_connection_status="success",
+                    aws_connection_error=None,
+                )
+                return JSONResponse(
+                    {"ok": True, "status": "success", "assumed_role": caller}
+                )
+            except Exception as assume_err:
+                error_msg = str(assume_err)
+                store.update(
+                    instance_id,
+                    aws_connection_status="error",
+                    aws_connection_error=error_msg,
+                )
+                return JSONResponse(
+                    {"ok": False, "status": "error", "error": error_msg}
+                )
+        except HTTPException:
+            raise
+        except Exception as e:
+            logging.error(
+                "Failed to test connection for instance %s: %s", instance_id, e
+            )
             raise HTTPException(status_code=500, detail=str(e))
 
     # ── Investigation history endpoints ────────────────────────────────────────
@@ -1186,6 +1284,69 @@ def mount_frontend(app: FastAPI, config=None) -> None:
             raise
         except Exception as e:
             logging.error("Failed to delete investigation %s: %s", investigation_id, e)
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @app.get("/api/investigations/similar")
+    async def similar_investigations(
+        q: str = "",
+        project_id: str = "",
+        limit: int = 5,
+    ):
+        """Find past investigations similar to the given query text."""
+        if not q.strip():
+            return JSONResponse([])
+        try:
+            from projects import get_investigation_store  # noqa: PLC0415
+
+            results = get_investigation_store().search_similar(
+                query=q,
+                project_id=project_id or None,
+                limit=limit,
+            )
+            return JSONResponse(results)
+        except Exception as e:
+            logging.error("Failed to search similar investigations: %s", e)
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @app.put("/api/investigations/{investigation_id}/feedback")
+    async def update_investigation_feedback(investigation_id: str, request: Request):
+        """Update feedback and optional resolution summary on an investigation.
+
+        Body: {"feedback": "helpful"|"not_helpful", "resolution_summary": "..."}
+        Only investigations marked "helpful" with a resolution_summary will be
+        injected into future LLM contexts.
+        """
+        try:
+            from projects import get_investigation_store  # noqa: PLC0415
+
+            body = await request.json()
+            feedback = body.get("feedback")
+            if feedback not in ("helpful", "not_helpful"):
+                raise HTTPException(
+                    status_code=400,
+                    detail='feedback must be "helpful" or "not_helpful"',
+                )
+            resolution_summary = body.get("resolution_summary")
+            inv = get_investigation_store().update_feedback(
+                investigation_id, feedback, resolution_summary
+            )
+            if not inv:
+                raise HTTPException(status_code=404, detail="Investigation not found")
+            return JSONResponse(
+                {
+                    "id": inv.id,
+                    "feedback": inv.feedback,
+                    "resolution_summary": inv.resolution_summary,
+                }
+            )
+        except HTTPException:
+            raise
+        except Exception as e:
+            logging.error(
+                "Failed to update feedback for investigation %s: %s",
+                investigation_id,
+                e,
+            )
             raise HTTPException(status_code=500, detail=str(e))
 
     # ── Manual investigate endpoint ───────────────────────────────────────────
@@ -1277,6 +1438,40 @@ def mount_frontend(app: FastAPI, config=None) -> None:
             "Consolidate findings from all systems into a single comprehensive analysis. "
             "Identify root causes, correlations across systems, and provide clear recommended actions."
         )
+
+        # ── Inject similar past investigations into LLM context ───────────
+        try:
+            from projects import get_investigation_store as _get_inv_store  # noqa: PLC0415
+
+            similar = _get_inv_store().search_similar(
+                query=f"{title} {description}",
+                project_id=project_id or None,
+                limit=3,
+                min_score=0.3,
+            )
+            # Only inject user-approved investigations with resolution summaries
+            approved = [
+                s
+                for s in similar
+                if s.get("feedback") == "helpful" and s.get("resolution_summary")
+            ]
+            if approved:
+                question += (
+                    "\n\n## Similar Past Investigations (verified resolutions)\n\n"
+                )
+                question += (
+                    "The following past investigations were marked as helpful by the team. "
+                    "Consider this context but verify independently with current data.\n\n"
+                )
+                for i, s in enumerate(approved, 1):
+                    question += (
+                        f"### Past Investigation {i} (match: {s['score']:.0%}, source: {s['source']})\n"
+                        f"**Question:** {s['question']}\n"
+                        f"**Resolution:** {s['resolution_summary']}\n"
+                        f"**Tools used:** {', '.join(s['tools_used']) if s['tools_used'] else 'N/A'}\n\n"
+                    )
+        except Exception as e:
+            logging.warning("Failed to inject similar investigations: %s", e)
 
         # Result container shared between the worker thread and the SSE generator
         result_q: queue.Queue = queue.Queue()
@@ -1686,7 +1881,7 @@ def mount_frontend(app: FastAPI, config=None) -> None:
 
                         _wb_enabled = (
                             get_webhook_settings_store()
-                            .get("pagerduty")
+                            .get("pagerduty", project_id=project_id or None)
                             .get("write_back_enabled", True)
                         )
                         pd_api_key = os.environ.get("PAGERDUTY_API_KEY", "")
@@ -1945,7 +2140,7 @@ def mount_frontend(app: FastAPI, config=None) -> None:
 
                     _wb_enabled = (
                         get_webhook_settings_store()
-                        .get("ado")
+                        .get("ado", project_id=project_id or None)
                         .get("write_back_enabled", True)
                     )
                     ado_pat = os.environ.get("ADO_PAT", "")
@@ -2204,7 +2399,7 @@ def mount_frontend(app: FastAPI, config=None) -> None:
 
                     _wb_enabled = (
                         get_webhook_settings_store()
-                        .get("salesforce")
+                        .get("salesforce", project_id=project_id or None)
                         .get("write_back_enabled", True)
                     )
                     sf_instance_url = os.environ.get(

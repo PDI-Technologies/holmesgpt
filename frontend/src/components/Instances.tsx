@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { api, type Instance } from '../lib/api'
+import { useState, useEffect, useCallback } from 'react'
+import { api, type Instance, type TestConnectionResponse } from '../lib/api'
 
 const TOOLSET_TYPES = [
   'grafana/dashboards',
@@ -110,11 +110,15 @@ function InstanceFormDialog({
   const [tags, setTags] = useState<Record<string, string>>(instance?.tags ?? {})
   const [secretArn, setSecretArn] = useState(instance?.secret_arn ?? '')
   const [mcpUrl, setMcpUrl] = useState(instance?.mcp_url ?? '')
-  const [awsAccounts, setAwsAccounts] = useState(
-    instance?.aws_accounts ? instance.aws_accounts.join(', ') : ''
-  )
+  const [awsAccountName, setAwsAccountName] = useState(instance?.aws_account_name ?? '')
+  const [awsAccountId, setAwsAccountId] = useState(instance?.aws_account_id ?? '')
+  const [awsRoleArn, setAwsRoleArn] = useState(instance?.aws_role_arn ?? '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [testing, setTesting] = useState(false)
+  const [testResult, setTestResult] = useState<TestConnectionResponse | null>(null)
+  const [connectionStatus, setConnectionStatus] = useState<string | null>(instance?.aws_connection_status ?? null)
+  const [connectionError, setConnectionError] = useState<string | null>(instance?.aws_connection_error ?? null)
 
   const isMcp = MCP_TYPES.has(type)
   const isAws = type === 'aws_api'
@@ -123,6 +127,15 @@ function InstanceFormDialog({
     if (!name.trim()) {
       setError('Instance name is required')
       return
+    }
+    if (isAws) {
+      if (!awsAccountName.trim()) { setError('Account Name is required'); return }
+      if (!awsAccountId.trim()) { setError('Account Number is required'); return }
+      if (!awsRoleArn.trim()) { setError('Role ARN is required'); return }
+      if (!/^arn:aws:iam::\d{12}:role\//.test(awsRoleArn.trim())) {
+        setError('Role ARN must match format: arn:aws:iam::<account-id>:role/<role-name>')
+        return
+      }
     }
     setSaving(true)
     setError(null)
@@ -133,9 +146,9 @@ function InstanceFormDialog({
         tags,
         secret_arn: secretArn.trim() || null,
         mcp_url: isMcp ? (mcpUrl.trim() || null) : null,
-        aws_accounts: isAws && awsAccounts.trim()
-          ? awsAccounts.split(',').map((s) => s.trim()).filter(Boolean)
-          : null,
+        aws_account_name: isAws ? (awsAccountName.trim() || null) : null,
+        aws_account_id: isAws ? (awsAccountId.trim() || null) : null,
+        aws_role_arn: isAws ? (awsRoleArn.trim() || null) : null,
       }
       if (instance) {
         await api.updateInstance(instance.id, payload)
@@ -148,6 +161,24 @@ function InstanceFormDialog({
       setError(e instanceof Error ? e.message : 'Failed to save instance')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleTestConnection = async () => {
+    if (!instance) return
+    setTesting(true)
+    setTestResult(null)
+    try {
+      const result = await api.testInstanceConnection(instance.id)
+      setTestResult(result)
+      setConnectionStatus(result.status)
+      setConnectionError(result.error ?? null)
+    } catch (e) {
+      setTestResult({ ok: false, status: 'error', error: e instanceof Error ? e.message : 'Test failed' })
+      setConnectionStatus('error')
+      setConnectionError(e instanceof Error ? e.message : 'Test failed')
+    } finally {
+      setTesting(false)
     }
   }
 
@@ -218,16 +249,99 @@ function InstanceFormDialog({
           )}
 
           {isAws && (
-            <div>
-              <label className="block text-sm font-medium text-pdi-granite mb-1">AWS Accounts</label>
-              <input
-                type="text"
-                value={awsAccounts}
-                onChange={(e) => setAwsAccounts(e.target.value)}
-                placeholder="account1, account2 (leave blank for all)"
-                className="w-full text-sm border border-pdi-cool-gray rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-pdi-sky"
-              />
-              <p className="text-xs text-pdi-slate mt-1">Comma-separated account profile names. Leave blank to allow all.</p>
+            <div className="space-y-4 p-4 bg-gray-50 rounded-lg border border-pdi-cool-gray">
+              <p className="text-xs font-medium text-pdi-slate uppercase tracking-wider">AWS Account Details</p>
+              <div>
+                <label className="block text-sm font-medium text-pdi-granite mb-1">
+                  Account Name <span className="text-pdi-orange">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={awsAccountName}
+                  onChange={(e) => setAwsAccountName(e.target.value)}
+                  placeholder="e.g. Retail Production"
+                  className="w-full text-sm border border-pdi-cool-gray rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-pdi-sky"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-pdi-granite mb-1">
+                  Account Number <span className="text-pdi-orange">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={awsAccountId}
+                  onChange={(e) => setAwsAccountId(e.target.value.replace(/\D/g, '').slice(0, 12))}
+                  placeholder="123456789012"
+                  className="w-full text-sm border border-pdi-cool-gray rounded-md px-3 py-2 font-mono focus:outline-none focus:ring-2 focus:ring-pdi-sky"
+                />
+                <p className="text-xs text-pdi-slate mt-1">12-digit AWS account ID</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-pdi-granite mb-1">
+                  Role ARN <span className="text-pdi-orange">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={awsRoleArn}
+                  onChange={(e) => setAwsRoleArn(e.target.value)}
+                  placeholder="arn:aws:iam::123456789012:role/HolmesGPT-ReadOnly"
+                  className="w-full text-sm border border-pdi-cool-gray rounded-md px-3 py-2 font-mono focus:outline-none focus:ring-2 focus:ring-pdi-sky"
+                />
+                <p className="text-xs text-pdi-slate mt-1">
+                  IAM role ARN created by the setup script. See Docs &gt; AWS Account tab.
+                </p>
+              </div>
+
+              {/* Connection status */}
+              {connectionStatus && (
+                <div className={`flex items-start gap-2 text-xs rounded-md px-3 py-2 ${
+                  connectionStatus === 'success'
+                    ? 'bg-pdi-grass/10 text-pdi-grass border border-pdi-grass/20'
+                    : 'bg-pdi-orange/10 text-pdi-orange border border-pdi-orange/20'
+                }`}>
+                  <span className={`mt-0.5 w-2 h-2 rounded-full shrink-0 ${
+                    connectionStatus === 'success' ? 'bg-pdi-grass' : 'bg-pdi-orange'
+                  }`} />
+                  <div>
+                    <span className="font-medium">
+                      {connectionStatus === 'success' ? 'Connected' : 'Connection failed'}
+                    </span>
+                    {connectionError && (
+                      <p className="mt-0.5 text-[11px] opacity-80 break-all">{connectionError}</p>
+                    )}
+                    {testResult?.assumed_role && (
+                      <p className="mt-0.5 text-[11px] opacity-80 font-mono">{testResult.assumed_role}</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Test Connection button — only for saved instances */}
+              {instance && awsRoleArn.trim() && (
+                <button
+                  type="button"
+                  onClick={handleTestConnection}
+                  disabled={testing}
+                  className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-pdi-sky border border-pdi-sky/30 rounded-lg hover:bg-pdi-sky/5 transition-colors disabled:opacity-50"
+                >
+                  {testing ? (
+                    <>
+                      <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      Testing...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                      </svg>
+                      Test Connection
+                    </>
+                  )}
+                </button>
+              )}
             </div>
           )}
 
@@ -255,22 +369,29 @@ function InstanceFormDialog({
   )
 }
 
-export default function Instances() {
+export default function Instances({ selectedProjectId }: { selectedProjectId: string | null }) {
   const [instances, setInstances] = useState<Instance[]>([])
   const [loading, setLoading] = useState(true)
   const [editingInstance, setEditingInstance] = useState<Instance | null | undefined>(undefined)
   const [deleting, setDeleting] = useState<string | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
-  const load = () => {
+  const load = useCallback(() => {
     setLoading(true)
-    api.listInstances()
-      .then((data) => setInstances(data ?? []))
-      .catch(() => setInstances([]))
-      .finally(() => setLoading(false))
-  }
+    if (selectedProjectId) {
+      api.previewProject(selectedProjectId)
+        .then((preview) => setInstances(preview.resolved_instances ?? []))
+        .catch(() => setInstances([]))
+        .finally(() => setLoading(false))
+    } else {
+      api.listInstances()
+        .then((data) => setInstances(data ?? []))
+        .catch(() => setInstances([]))
+        .finally(() => setLoading(false))
+    }
+  }, [selectedProjectId])
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [load])
 
   const handleDeleteConfirmed = async (id: string) => {
     setConfirmDeleteId(null)
@@ -333,11 +454,26 @@ export default function Instances() {
               <tbody className="divide-y divide-pdi-cool-gray">
                 {instances.map((inst) => (
                   <tr key={inst.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-3 font-medium text-pdi-granite">{inst.name}</td>
                     <td className="px-4 py-3">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-pdi-sky/10 text-pdi-indigo">
-                        {inst.type}
-                      </span>
+                      <div className="font-medium text-pdi-granite">{inst.name}</div>
+                      {inst.type === 'aws_api' && inst.aws_account_id && (
+                        <div className="text-[11px] text-pdi-slate font-mono mt-0.5">
+                          {inst.aws_account_name && <span>{inst.aws_account_name} &middot; </span>}
+                          {inst.aws_account_id}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1.5">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-pdi-sky/10 text-pdi-indigo">
+                          {inst.type}
+                        </span>
+                        {inst.type === 'aws_api' && inst.aws_connection_status && (
+                          <span className={`w-2 h-2 rounded-full ${
+                            inst.aws_connection_status === 'success' ? 'bg-pdi-grass' : 'bg-pdi-orange'
+                          }`} title={inst.aws_connection_status === 'success' ? 'Connected' : `Error: ${inst.aws_connection_error ?? 'unknown'}`} />
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-1">

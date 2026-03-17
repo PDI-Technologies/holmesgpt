@@ -81,7 +81,7 @@ def _save_investigation(
         import sys as _sys
         import os as _os
 
-        _frontend_dir = _os.path.join(_os.path.dirname(__file__), "infra", "frontend")
+        _frontend_dir = _os.path.join(_os.path.dirname(__file__), "frontend")
         if _frontend_dir not in _sys.path:
             _sys.path.insert(0, _frontend_dir)
         from projects import get_investigation_store, Investigation, ToolCallRecord  # type: ignore  # noqa: PLC0415
@@ -514,12 +514,12 @@ def chat(chat_request: ChatRequest, http_request: Request):
         storage = tool_result_storage()
         tool_results_dir = storage.__enter__()
 
-        # Ensure infra/frontend is on sys.path so we can import shared helpers
+        # Ensure frontend is on sys.path so we can import shared helpers
         import sys
         import os as _os
         import re as _re
 
-        _frontend_dir = _os.path.join(_os.path.dirname(__file__), "infra", "frontend")
+        _frontend_dir = _os.path.join(_os.path.dirname(__file__), "frontend")
         if _frontend_dir not in sys.path:
             sys.path.insert(0, _frontend_dir)
 
@@ -590,8 +590,41 @@ def chat(chat_request: ChatRequest, http_request: Request):
             source = _extract_source_from_ask(chat_request.ask)
             ai = _make_scoped_ai(source)
         global_instructions = dal.get_global_instructions_for_account()
+
+        # ── Inject verified past resolutions into the first message ───────
+        enriched_ask = chat_request.ask
+        if not chat_request.conversation_history:
+            try:
+                from projects import get_investigation_store  # noqa: PLC0415
+
+                similar = get_investigation_store().search_similar(
+                    query=chat_request.ask,
+                    project_id=chat_request.project_id or None,
+                    limit=3,
+                    min_score=0.3,
+                )
+                approved = [
+                    s for s in similar
+                    if s.get("feedback") == "helpful" and s.get("resolution_summary")
+                ]
+                if approved:
+                    ctx = "\n\n## Similar Past Investigations (verified resolutions)\n\n"
+                    ctx += (
+                        "The following past investigations were marked as helpful by the team. "
+                        "Consider this context but verify independently with current data.\n\n"
+                    )
+                    for i, s in enumerate(approved, 1):
+                        ctx += (
+                            f"### Past Investigation {i} (match: {s['score']:.0%}, source: {s['source']})\n"
+                            f"**Question:** {s['question']}\n"
+                            f"**Resolution:** {s['resolution_summary']}\n\n"
+                        )
+                    enriched_ask = chat_request.ask + ctx
+            except Exception as e:
+                logging.warning("Failed to inject similar investigations into chat: %s", e)
+
         messages = build_chat_messages(
-            chat_request.ask,
+            enriched_ask,
             chat_request.conversation_history,
             ai=ai,
             config=config,

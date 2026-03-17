@@ -173,8 +173,8 @@ config_toolsets.yaml
 eval_results.json
 
 # Un-ignore frontend source code (the global lib/ rule on line 22 catches it)
-!infra/frontend/src/lib/
-!infra/frontend/src/lib/**
+!frontend/src/lib/
+!frontend/src/lib/**
 
 # Infrastructure (Terraform/OpenTofu)
 infra/.terraform/
@@ -186,8 +186,8 @@ infra/envs/*.auto.tfvars
 infra/envs/backend-*.hcl
 
 # Frontend build artifacts
-infra/frontend/node_modules/
-infra/frontend/dist/
+frontend/node_modules/
+frontend/dist/
 
 # Playwright test screenshots
 screenshots/

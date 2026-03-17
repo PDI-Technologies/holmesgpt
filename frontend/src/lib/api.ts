@@ -177,7 +177,19 @@ export interface Instance {
   secret_arn: string | null;
   mcp_url?: string | null;
   aws_accounts?: string[] | null;
+  aws_account_name?: string | null;
+  aws_account_id?: string | null;
+  aws_role_arn?: string | null;
+  aws_connection_status?: string | null;
+  aws_connection_error?: string | null;
   created_at: string;
+}
+
+export interface TestConnectionResponse {
+  ok: boolean;
+  status: string;
+  assumed_role?: string;
+  error?: string;
 }
 
 export interface InstancesResponse {
@@ -197,6 +209,7 @@ export interface Project {
   name: string;
   description: string;
   tag_filter: TagFilter | null;
+  webhook_write_back: Record<string, boolean | null> | null;
   created_at: string;
 }
 
@@ -225,6 +238,20 @@ export interface Investigation {
   project_id: string;
   status: 'running' | 'completed' | 'failed';
   error: string;
+  feedback: string | null;
+  resolution_summary: string | null;
+}
+
+export interface SimilarInvestigation {
+  id: string;
+  question: string;
+  answer_summary: string;
+  source: string;
+  started_at: string;
+  score: number;
+  tools_used: string[];
+  feedback: string | null;
+  resolution_summary: string | null;
 }
 
 export const api = {
@@ -435,6 +462,10 @@ export const api = {
     return request(`/api/projects/${encodeURIComponent(id)}/preview`);
   },
 
+  getProjectWebhookSettings(id: string): Promise<Record<string, { write_back_enabled: boolean; is_override: boolean; global_default: boolean }>> {
+    return request(`/api/projects/${encodeURIComponent(id)}/webhook-settings`);
+  },
+
   listInstances(): Promise<Instance[]> {
     return request<InstancesResponse>('/api/instances').then((r) => r.instances);
   },
@@ -463,6 +494,12 @@ export const api = {
     });
   },
 
+  testInstanceConnection(id: string): Promise<TestConnectionResponse> {
+    return request(`/api/instances/${encodeURIComponent(id)}/test-connection`, {
+      method: 'POST',
+    });
+  },
+
   getInvestigations(params?: { limit?: number; source?: string; project_id?: string }): Promise<Investigation[]> {
     const qs = new URLSearchParams();
     if (params?.limit) qs.set('limit', String(params.limit));
@@ -479,6 +516,20 @@ export const api = {
   deleteInvestigation(id: string): Promise<{ ok: boolean }> {
     return request(`/api/investigations/${encodeURIComponent(id)}`, {
       method: 'DELETE',
+    });
+  },
+
+  getSimilarInvestigations(query: string, projectId?: string, limit?: number): Promise<SimilarInvestigation[]> {
+    const qs = new URLSearchParams({ q: query });
+    if (projectId) qs.set('project_id', projectId);
+    if (limit) qs.set('limit', String(limit));
+    return request(`/api/investigations/similar?${qs.toString()}`);
+  },
+
+  updateInvestigationFeedback(id: string, feedback: 'helpful' | 'not_helpful', resolutionSummary?: string): Promise<{ id: string; feedback: string; resolution_summary: string | null }> {
+    return request(`/api/investigations/${encodeURIComponent(id)}/feedback`, {
+      method: 'PUT',
+      body: JSON.stringify({ feedback, resolution_summary: resolutionSummary }),
     });
   },
 

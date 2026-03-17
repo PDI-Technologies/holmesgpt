@@ -175,7 +175,8 @@ jobs:
           READY=$(curl -sf --retry 5 --retry-delay 5 "$BASE_URL/readyz" || echo '{"status":"unreachable"}')
           echo "  $READY"
 
-          if echo "$HEALTH" | grep -q '"healthy"' && echo "$READY" | grep -q '"ready"'; then
+          # /healthz returns {"status":"healthy"}, /readyz returns {"status":"ready",...}
+          if echo "$HEALTH" | grep -qE '"healthy"|"ok"' && echo "$READY" | grep -qE '"ready"|"ok"'; then
             echo "✅ Health checks passed"
           else
             echo "⚠️  Health check response unexpected — check pod logs"

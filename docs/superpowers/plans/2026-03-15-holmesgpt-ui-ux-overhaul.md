@@ -33,7 +33,7 @@
 ### Task 1: Enhance LoginPage visual design
 
 **Files:**
-- Modify: `infra/frontend/src/components/LoginPage.tsx`
+- Modify: `frontend/src/components/LoginPage.tsx`
 
 - [ ] **Step 1: Add radial gradient background with grid pattern**
 
@@ -139,7 +139,7 @@ Open the app and navigate to the login page. Confirm:
 
 ```bash
 cd C:\Codebase\holmesgpt-pdi
-git add infra/frontend/src/components/LoginPage.tsx
+git add frontend/src/components/LoginPage.tsx
 git commit -s --no-verify -m "feat(ui): enhance LoginPage with gradient background, SVG logo, and accessibility labels"
 ```
 
@@ -150,7 +150,7 @@ git commit -s --no-verify -m "feat(ui): enhance LoginPage with gradient backgrou
 ### Task 2: Improve sidebar project selector and logout button
 
 **Files:**
-- Modify: `infra/frontend/src/components/Layout.tsx`
+- Modify: `frontend/src/components/Layout.tsx`
 
 - [ ] **Step 1: Standardize sidebar opacity tokens**
 
@@ -225,7 +225,7 @@ Check:
 - [ ] **Step 7: Commit**
 
 ```bash
-git add infra/frontend/src/components/Layout.tsx
+git add frontend/src/components/Layout.tsx
 git commit -s --no-verify -m "feat(ui): improve sidebar with consistent opacity tokens, visible logout, gradient accents"
 ```
 
@@ -236,7 +236,7 @@ git commit -s --no-verify -m "feat(ui): improve sidebar with consistent opacity 
 ### Task 3: Improve Chat suggestion chips and input behavior
 
 **Files:**
-- Modify: `infra/frontend/src/components/Chat.tsx`
+- Modify: `frontend/src/components/Chat.tsx`
 
 - [ ] **Step 1: Make suggestion chips send immediately (not populate-and-focus)**
 
@@ -386,7 +386,7 @@ Check:
 - [ ] **Step 8: Commit**
 
 ```bash
-git add infra/frontend/src/components/Chat.tsx
+git add frontend/src/components/Chat.tsx
 git commit -s --no-verify -m "feat(ui): improve Chat with auto-growing textarea, direct-send chips, clear confirmation"
 ```
 
@@ -397,7 +397,7 @@ git commit -s --no-verify -m "feat(ui): improve Chat with auto-growing textarea,
 ### Task 4: Improve MessageBubble visual design
 
 **Files:**
-- Modify: `infra/frontend/src/components/MessageBubble.tsx`
+- Modify: `frontend/src/components/MessageBubble.tsx`
 
 - [ ] **Step 1: Read the current MessageBubble.tsx**
 
@@ -405,7 +405,7 @@ git commit -s --no-verify -m "feat(ui): improve Chat with auto-growing textarea,
 # Read the file to understand current structure
 ```
 
-Use the Read tool on `infra/frontend/src/components/MessageBubble.tsx`.
+Use the Read tool on `frontend/src/components/MessageBubble.tsx`.
 
 - [ ] **Step 2: Mute user bubble background**
 
@@ -497,7 +497,7 @@ Check:
 - [ ] **Step 6: Commit**
 
 ```bash
-git add infra/frontend/src/components/MessageBubble.tsx
+git add frontend/src/components/MessageBubble.tsx
 git commit -s --no-verify -m "feat(ui): improve MessageBubble with muted user bubble, Holmes avatar, copy button"
 ```
 
@@ -508,11 +508,11 @@ git commit -s --no-verify -m "feat(ui): improve MessageBubble with muted user bu
 ### Task 5: Fix ToolCallCard brand colors
 
 **Files:**
-- Modify: `infra/frontend/src/components/ToolCallCard.tsx`
+- Modify: `frontend/src/components/ToolCallCard.tsx`
 
 - [ ] **Step 1: Read the current ToolCallCard.tsx**
 
-Use the Read tool on `infra/frontend/src/components/ToolCallCard.tsx`.
+Use the Read tool on `frontend/src/components/ToolCallCard.tsx`.
 
 - [ ] **Step 2: Replace non-brand `text-emerald-300` with PDI equivalent**
 
@@ -578,7 +578,7 @@ Check:
 - [ ] **Step 6: Commit**
 
 ```bash
-git add infra/frontend/src/components/ToolCallCard.tsx
+git add frontend/src/components/ToolCallCard.tsx
 git commit -s --no-verify -m "feat(ui): fix ToolCallCard brand colors, add copy button, status border"
 ```
 
@@ -589,7 +589,7 @@ git commit -s --no-verify -m "feat(ui): fix ToolCallCard brand colors, add copy 
 ### Task 6: Improve Investigate form and results
 
 **Files:**
-- Modify: `infra/frontend/src/components/Investigate.tsx`
+- Modify: `frontend/src/components/Investigate.tsx`
 
 - [ ] **Step 1: Pin form at top — restructure layout**
 
@@ -779,7 +779,7 @@ Check:
 - [ ] **Step 11: Commit**
 
 ```bash
-git add infra/frontend/src/components/Investigate.tsx
+git add frontend/src/components/Investigate.tsx
 git commit -s --no-verify -m "feat(ui): improve Investigate with pinned form, gradient button, status borders, shimmer loading"
 ```
 
@@ -790,7 +790,7 @@ git commit -s --no-verify -m "feat(ui): improve Investigate with pinned form, gr
 ### Task 7: Improve Projects page and modal
 
 **Files:**
-- Modify: `infra/frontend/src/components/Projects.tsx`
+- Modify: `frontend/src/components/Projects.tsx`
 
 - [ ] **Step 1: Replace gray-* colors with PDI equivalents throughout**
 
@@ -928,7 +928,7 @@ Check:
 - [ ] **Step 10: Commit**
 
 ```bash
-git add infra/frontend/src/components/Projects.tsx
+git add frontend/src/components/Projects.tsx
 git commit -s --no-verify -m "feat(ui): improve Projects with PDI colors, card hover effects, enhanced empty state"
 ```
 
@@ -939,11 +939,11 @@ git commit -s --no-verify -m "feat(ui): improve Projects with PDI colors, card h
 ### Task 8: Improve Integrations page
 
 **Files:**
-- Modify: `infra/frontend/src/components/Integrations.tsx`
+- Modify: `frontend/src/components/Integrations.tsx`
 
 - [ ] **Step 1: Read the current Integrations.tsx**
 
-Use the Read tool on `infra/frontend/src/components/Integrations.tsx` to understand the current structure before making changes.
+Use the Read tool on `frontend/src/components/Integrations.tsx` to understand the current structure before making changes.
 
 - [ ] **Step 2: Replace gray-* colors with PDI equivalents**
 
@@ -1010,7 +1010,7 @@ Check:
 - [ ] **Step 7: Commit**
 
 ```bash
-git add infra/frontend/src/components/Integrations.tsx
+git add frontend/src/components/Integrations.tsx
 git commit -s --no-verify -m "feat(ui): improve Integrations with PDI colors, status badges, card hover effects"
 ```
 
@@ -1021,14 +1021,14 @@ git commit -s --no-verify -m "feat(ui): improve Integrations with PDI colors, st
 ### Task 9: Apply PDI color consistency to remaining pages
 
 **Files:**
-- Modify: `infra/frontend/src/components/History.tsx` (if exists)
-- Modify: `infra/frontend/src/components/Settings.tsx` (if exists)
-- Modify: `infra/frontend/src/components/Instances.tsx` (if exists)
+- Modify: `frontend/src/components/History.tsx` (if exists)
+- Modify: `frontend/src/components/Settings.tsx` (if exists)
+- Modify: `frontend/src/components/Instances.tsx` (if exists)
 
 - [ ] **Step 1: Check which additional component files exist**
 
 ```bash
-ls infra/frontend/src/components/
+ls frontend/src/components/
 ```
 
 - [ ] **Step 2: Apply PDI color replacements to each file**
@@ -1061,7 +1061,7 @@ For each page with a header section, add the gradient accent line pattern:
 - [ ] **Step 4: Commit**
 
 ```bash
-git add infra/frontend/src/components/
+git add frontend/src/components/
 git commit -s --no-verify -m "feat(ui): apply PDI color consistency to History, Settings, Instances pages"
 ```
 
@@ -1072,8 +1072,8 @@ git commit -s --no-verify -m "feat(ui): apply PDI color consistency to History, 
 ### Task 10: Global CSS and animation polish
 
 **Files:**
-- Modify: `infra/frontend/src/styles/globals.css`
-- Modify: `infra/frontend/tailwind.config.js`
+- Modify: `frontend/src/styles/globals.css`
+- Modify: `frontend/tailwind.config.js`
 
 - [ ] **Step 1: Add smooth page transition animation**
 
@@ -1137,7 +1137,7 @@ Open the app and navigate through all pages:
 - [ ] **Step 5: Final commit**
 
 ```bash
-git add infra/frontend/src/styles/globals.css infra/frontend/tailwind.config.js
+git add frontend/src/styles/globals.css frontend/tailwind.config.js
 git commit -s --no-verify -m "feat(ui): add page transition animation and polish global CSS"
 ```
 

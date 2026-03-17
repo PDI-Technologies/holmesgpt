@@ -325,7 +325,7 @@ Six independent jobs run in parallel — no AWS credentials required for any of 
 - Fork PRs: build only (no push — no AWS credentials available)
 - Posts image tag as a PR comment for easy manual testing
 
-**`pdi-iac.yaml` — OpenTofu IaC** (runs on `infra/**` changes, excluding `infra/frontend/**`)
+**`pdi-iac.yaml` — OpenTofu IaC** (runs on `infra/**` changes, excluding `frontend/**`)
 - PR: `tofu plan` for both dev and prod, posts plan diff as PR comment
 - Push to `main`: `tofu apply` for dev only
 - Push to `release/**`: `tofu apply` for prod only
@@ -333,10 +333,10 @@ Six independent jobs run in parallel — no AWS credentials required for any of 
 
 ### Frontend ESLint Setup
 
-The frontend uses ESLint v9 flat config (`infra/frontend/eslint.config.js`). After any change to `infra/frontend/package.json` (adding/removing packages), run:
+The frontend uses ESLint v9 flat config (`frontend/eslint.config.js`). After any change to `frontend/package.json` (adding/removing packages), run:
 
 ```bash
-cd infra/frontend
+cd frontend
 npm install   # regenerates package-lock.json for npm ci in CI
 ```
 

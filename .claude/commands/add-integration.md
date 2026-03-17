@@ -42,7 +42,7 @@ Update all five locations (see `add-toolset` skill Step 8):
 
 If the new integration should be available for per-project credential isolation:
 
-**For MCP server integrations** — add the type name to `_MCP_TOOLSET_TYPES` in `infra/frontend/projects.py` and add entries to `_MCP_DEFAULT_URLS`, `_MCP_ICONS`, `_MCP_DESCRIPTIONS`, `_MCP_LLM_INSTRUCTIONS`. Also add to `MCP_TYPES` set in `infra/frontend/src/components/Projects.tsx`.
+**For MCP server integrations** — add the type name to `_MCP_TOOLSET_TYPES` in `frontend/projects.py` and add entries to `_MCP_DEFAULT_URLS`, `_MCP_ICONS`, `_MCP_DESCRIPTIONS`, `_MCP_LLM_INSTRUCTIONS`. Also add to `MCP_TYPES` set in `frontend/src/components/Projects.tsx`.
 
 **For Python toolsets** — add to `PYTHON_TOOLSET_FACTORIES` in `holmes/plugins/toolsets/__init__.py` and add an optional `name` parameter to the toolset's `__init__`. Also add to `TOOLSET_TYPES` array in `Projects.tsx`.
 

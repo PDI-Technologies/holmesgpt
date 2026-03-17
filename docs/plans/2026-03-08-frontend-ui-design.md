@@ -68,7 +68,7 @@ Fixed sidebar (left) + main content area.
 ## Project Structure
 
 ```
-infra/frontend/
+frontend/
   package.json
   vite.config.ts
   tailwind.config.ts

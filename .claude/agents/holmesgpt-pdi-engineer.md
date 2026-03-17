@@ -53,7 +53,7 @@ Tofu binary:    ~/.local/bin/tofu
 - Use `~/.local/bin/tofu`, NOT `terraform`
 - Use `--profile <AWS_PROFILE>` for all AWS CLI calls
 - Read API keys from the live k8s secret `holmes-api-keys` (not Secrets Manager — it may be stale)
-- Run `npm ci` (not `npm install`) in `infra/frontend/` for reproducible installs
+- Run `npm ci` (not `npm install`) in `frontend/` for reproducible installs
 - Use `git commit -s --no-verify` for all commits
 - Check `kubectl rollout status` after every deploy
 - Verify `/healthz` and `/readyz` after every deploy
