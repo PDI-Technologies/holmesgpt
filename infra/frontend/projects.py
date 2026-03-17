@@ -61,6 +61,12 @@ class Instance(BaseModel):
     secret_arn: Optional[str] = None
     mcp_url: Optional[str] = None
     aws_accounts: Optional[list[str]] = None
+    # AWS cross-account fields
+    aws_account_name: Optional[str] = None
+    aws_account_id: Optional[str] = None
+    aws_role_arn: Optional[str] = None
+    aws_connection_status: Optional[str] = None  # "success", "error", or None (untested)
+    aws_connection_error: Optional[str] = None
     created_at: str = ""
 
 
@@ -129,6 +135,9 @@ class InstancesStore:
         secret_arn: Optional[str] = None,
         mcp_url: Optional[str] = None,
         aws_accounts: Optional[list[str]] = None,
+        aws_account_name: Optional[str] = None,
+        aws_account_id: Optional[str] = None,
+        aws_role_arn: Optional[str] = None,
     ) -> Instance:
         inst = Instance(
             type=type,
@@ -137,6 +146,9 @@ class InstancesStore:
             secret_arn=secret_arn,
             mcp_url=mcp_url,
             aws_accounts=aws_accounts,
+            aws_account_name=aws_account_name,
+            aws_account_id=aws_account_id,
+            aws_role_arn=aws_role_arn,
             created_at=datetime.now(timezone.utc).isoformat(),
         )
         _get_table().put_item(

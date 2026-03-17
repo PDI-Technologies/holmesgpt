@@ -177,7 +177,19 @@ export interface Instance {
   secret_arn: string | null;
   mcp_url?: string | null;
   aws_accounts?: string[] | null;
+  aws_account_name?: string | null;
+  aws_account_id?: string | null;
+  aws_role_arn?: string | null;
+  aws_connection_status?: string | null;
+  aws_connection_error?: string | null;
   created_at: string;
+}
+
+export interface TestConnectionResponse {
+  ok: boolean;
+  status: string;
+  assumed_role?: string;
+  error?: string;
 }
 
 export interface InstancesResponse {
@@ -479,6 +491,12 @@ export const api = {
   deleteInstance(id: string): Promise<{ ok: boolean }> {
     return request(`/api/instances/${encodeURIComponent(id)}`, {
       method: 'DELETE',
+    });
+  },
+
+  testInstanceConnection(id: string): Promise<TestConnectionResponse> {
+    return request(`/api/instances/${encodeURIComponent(id)}/test-connection`, {
+      method: 'POST',
     });
   },
 

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { api, type Integration, type AwsAccount, type Instance, type ConfigField, type WebhookInfo } from '../lib/api'
+import { api, type Integration, type AwsAccount, type Instance, type ConfigField, type WebhookInfo, type TestConnectionResponse } from '../lib/api'
 
 type StatusFilter = 'all' | 'enabled' | 'disabled' | 'failed'
 type TypeFilter = 'all' | 'built-in' | 'mcp' | 'custom' | 'http' | 'database'
@@ -133,47 +133,103 @@ function InstanceForm({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // AWS-specific fields
+  const isAws = integrationType === 'aws_api'
+  const [awsAccountName, setAwsAccountName] = useState(instance?.aws_account_name ?? '')
+  const [awsAccountId, setAwsAccountId] = useState(instance?.aws_account_id ?? '')
+  const [awsRoleArn, setAwsRoleArn] = useState(instance?.aws_role_arn ?? '')
+  const [testing, setTesting] = useState(false)
+  const [testResult, setTestResult] = useState<TestConnectionResponse | null>(null)
+  const [connectionStatus, setConnectionStatus] = useState<string | null>(instance?.aws_connection_status ?? null)
+  const [connectionError, setConnectionError] = useState<string | null>(instance?.aws_connection_error ?? null)
+
+  const handleTestConnection = async () => {
+    if (!instance) return
+    setTesting(true)
+    setTestResult(null)
+    try {
+      const result = await api.testInstanceConnection(instance.id)
+      setTestResult(result)
+      setConnectionStatus(result.status)
+      setConnectionError(result.error ?? null)
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Test failed'
+      setTestResult({ ok: false, status: 'error', error: msg })
+      setConnectionStatus('error')
+      setConnectionError(msg)
+    } finally {
+      setTesting(false)
+    }
+  }
+
   const handleSave = async () => {
     if (!name.trim()) {
       setError('Instance name is required')
       return
     }
+    if (isAws) {
+      if (!awsAccountName.trim()) { setError('Account Name is required'); return }
+      if (!awsAccountId.trim()) { setError('Account Number is required'); return }
+      if (!awsRoleArn.trim()) { setError('Role ARN is required'); return }
+      if (!/^arn:aws:iam::\d{12}:role\//.test(awsRoleArn.trim())) {
+        setError('Role ARN must match format: arn:aws:iam::<account-id>:role/<role-name>')
+        return
+      }
+    }
     setSaving(true)
     setError(null)
     try {
-      // Build config from schema fields
-      const config: Record<string, unknown> = {}
-      for (const [k, v] of Object.entries(fields)) {
-        if (v === '') continue
-        const schemaField = schema.find((f) => f.name === k)
-        const fieldType = schemaField?.type || 'str'
-        if (fieldType === 'bool') config[k] = v === 'true'
-        else if (fieldType === 'int') config[k] = parseInt(v, 10)
-        else if (fieldType === 'float') config[k] = parseFloat(v)
-        else if (fieldType === 'dict' || fieldType === 'list') {
-          try { config[k] = JSON.parse(v) } catch { config[k] = v }
-        } else {
-          config[k] = v
+      if (isAws) {
+        const payload = {
+          type: integrationType,
+          name: name.trim(),
+          tags,
+          secret_arn: null as string | null,
+          mcp_url: null as string | null,
+          aws_account_name: awsAccountName.trim() || null,
+          aws_account_id: awsAccountId.trim() || null,
+          aws_role_arn: awsRoleArn.trim() || null,
         }
-      }
-
-      const payload = {
-        type: integrationType,
-        name: name.trim(),
-        tags,
-        secret_arn: (config['secret_arn'] as string | null) ?? null,
-        mcp_url: (config['mcp_url'] as string | null) ?? null,
-        aws_accounts: config['aws_accounts']
-          ? (typeof config['aws_accounts'] === 'string'
-              ? (config['aws_accounts'] as string).split(',').map((s) => s.trim()).filter(Boolean)
-              : config['aws_accounts'] as string[])
-          : null,
-      }
-
-      if (instance) {
-        await api.updateInstance(instance.id, payload)
+        if (instance) {
+          await api.updateInstance(instance.id, payload)
+        } else {
+          await api.createInstance(payload)
+        }
       } else {
-        await api.createInstance(payload)
+        // Build config from schema fields
+        const config: Record<string, unknown> = {}
+        for (const [k, v] of Object.entries(fields)) {
+          if (v === '') continue
+          const schemaField = schema.find((f) => f.name === k)
+          const fieldType = schemaField?.type || 'str'
+          if (fieldType === 'bool') config[k] = v === 'true'
+          else if (fieldType === 'int') config[k] = parseInt(v, 10)
+          else if (fieldType === 'float') config[k] = parseFloat(v)
+          else if (fieldType === 'dict' || fieldType === 'list') {
+            try { config[k] = JSON.parse(v) } catch { config[k] = v }
+          } else {
+            config[k] = v
+          }
+        }
+
+        const payload = {
+          type: integrationType,
+          name: name.trim(),
+          tags,
+          secret_arn: (config['secret_arn'] as string | null) ?? null,
+          mcp_url: (config['mcp_url'] as string | null) ?? null,
+          aws_accounts: config['aws_accounts']
+            ? (typeof config['aws_accounts'] === 'string'
+                ? (config['aws_accounts'] as string).split(',').map((s) => s.trim()).filter(Boolean)
+                : config['aws_accounts'] as string[])
+            : null,
+        }
+
+        if (instance) {
+          await api.updateInstance(instance.id, payload)
+        } else {
+          await api.createInstance(payload)
+        }
       }
       onSave()
     } catch (e) {
@@ -210,8 +266,90 @@ function InstanceForm({
         <TagsEditor tags={tags} onChange={setTags} />
       </div>
 
-      {/* Schema-driven config fields */}
-      {schema.length > 0 && (
+      {/* AWS-specific fields */}
+      {isAws && (
+        <div className="space-y-3 p-3 bg-gray-50 rounded-lg border border-pdi-cool-gray">
+          <p className="text-xs font-semibold text-pdi-granite uppercase tracking-wide">AWS Account Details</p>
+          <div>
+            <label className="text-xs font-medium text-pdi-granite">Account Name <span className="text-pdi-orange">*</span></label>
+            <input
+              type="text"
+              value={awsAccountName}
+              onChange={(e) => setAwsAccountName(e.target.value)}
+              placeholder="e.g. Retail Production"
+              className="w-full mt-1 px-3 py-2 border border-pdi-cool-gray rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-pdi-sky"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-pdi-granite">Account Number <span className="text-pdi-orange">*</span></label>
+            <input
+              type="text"
+              value={awsAccountId}
+              onChange={(e) => setAwsAccountId(e.target.value.replace(/\D/g, '').slice(0, 12))}
+              placeholder="123456789012"
+              className="w-full mt-1 px-3 py-2 border border-pdi-cool-gray rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-pdi-sky"
+            />
+            <p className="text-[11px] text-pdi-slate mt-1">12-digit AWS account ID</p>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-pdi-granite">Role ARN <span className="text-pdi-orange">*</span></label>
+            <input
+              type="text"
+              value={awsRoleArn}
+              onChange={(e) => setAwsRoleArn(e.target.value)}
+              placeholder="arn:aws:iam::123456789012:role/HolmesGPT-ReadOnly"
+              className="w-full mt-1 px-3 py-2 border border-pdi-cool-gray rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-pdi-sky"
+            />
+            <p className="text-[11px] text-pdi-slate mt-1">IAM role ARN created by the setup script. See Docs &gt; AWS Account tab.</p>
+          </div>
+
+          {connectionStatus && (
+            <div className={`flex items-start gap-2 text-xs rounded-md px-3 py-2 ${
+              connectionStatus === 'success'
+                ? 'bg-pdi-grass/10 text-pdi-grass border border-pdi-grass/20'
+                : 'bg-pdi-orange/10 text-pdi-orange border border-pdi-orange/20'
+            }`}>
+              <span className={`mt-0.5 w-2 h-2 rounded-full shrink-0 ${
+                connectionStatus === 'success' ? 'bg-pdi-grass' : 'bg-pdi-orange'
+              }`} />
+              <div>
+                <span className="font-medium">{connectionStatus === 'success' ? 'Connected' : 'Connection failed'}</span>
+                {connectionError && <p className="mt-0.5 text-[11px] opacity-80 break-all">{connectionError}</p>}
+                {testResult?.assumed_role && <p className="mt-0.5 text-[11px] opacity-80 font-mono">{testResult.assumed_role}</p>}
+              </div>
+            </div>
+          )}
+
+          {instance && awsRoleArn.trim() && (
+            <button
+              type="button"
+              onClick={handleTestConnection}
+              disabled={testing}
+              className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-pdi-sky border border-pdi-sky/30 rounded-lg hover:bg-pdi-sky/5 transition-colors disabled:opacity-50"
+            >
+              {testing ? (
+                <>
+                  <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  Testing...
+                </>
+              ) : (
+                <>
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                  Test Connection
+                </>
+              )}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Schema-driven config fields (non-AWS) */}
+      {!isAws && schema.length > 0 && (
         <div className="space-y-3">
           <p className="text-xs font-semibold text-pdi-granite uppercase tracking-wide">Configuration</p>
           {schema.map((field: ConfigField) => (

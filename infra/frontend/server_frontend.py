@@ -1104,6 +1104,9 @@ def mount_frontend(app: FastAPI, config=None) -> None:
                 secret_arn=body.get("secret_arn"),
                 mcp_url=body.get("mcp_url"),
                 aws_accounts=body.get("aws_accounts"),
+                aws_account_name=body.get("aws_account_name"),
+                aws_account_id=body.get("aws_account_id"),
+                aws_role_arn=body.get("aws_role_arn"),
             )
             return JSONResponse(inst.model_dump(), status_code=201)
         except KeyError as e:
@@ -1158,6 +1161,57 @@ def mount_frontend(app: FastAPI, config=None) -> None:
             raise
         except Exception as e:
             logging.error("Failed to delete instance %s: %s", instance_id, e)
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @app.post("/api/instances/{instance_id}/test-connection")
+    async def test_instance_connection(instance_id: str):
+        """Test AWS cross-account connection by attempting STS AssumeRole."""
+        try:
+            import boto3 as _boto3  # noqa: PLC0415
+
+            from projects import get_instances_store  # noqa: PLC0415
+
+            store = get_instances_store()
+            inst = store.get(instance_id)
+            if not inst:
+                raise HTTPException(status_code=404, detail="Instance not found")
+            if inst.type != "aws_api" or not inst.aws_role_arn:
+                raise HTTPException(
+                    status_code=400, detail="Instance is not an AWS type or has no Role ARN"
+                )
+
+            # Attempt AssumeRole to validate the cross-account trust
+            sts = _boto3.client("sts", region_name=os.environ.get("AWS_REGION", "us-east-1"))
+            try:
+                resp = sts.assume_role(
+                    RoleArn=inst.aws_role_arn,
+                    RoleSessionName="holmesgpt-connection-test",
+                    DurationSeconds=900,
+                )
+                caller = resp["AssumedRoleUser"]["Arn"]
+                # Update instance with success status
+                store.update(
+                    instance_id,
+                    aws_connection_status="success",
+                    aws_connection_error=None,
+                )
+                return JSONResponse(
+                    {"ok": True, "status": "success", "assumed_role": caller}
+                )
+            except Exception as assume_err:
+                error_msg = str(assume_err)
+                store.update(
+                    instance_id,
+                    aws_connection_status="error",
+                    aws_connection_error=error_msg,
+                )
+                return JSONResponse(
+                    {"ok": False, "status": "error", "error": error_msg}
+                )
+        except HTTPException:
+            raise
+        except Exception as e:
+            logging.error("Failed to test connection for instance %s: %s", instance_id, e)
             raise HTTPException(status_code=500, detail=str(e))
 
     # ── Investigation history endpoints ────────────────────────────────────────
