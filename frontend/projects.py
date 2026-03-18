@@ -488,6 +488,8 @@ class Investigation(BaseModel):
     feedback: Optional[str] = None
     # User-curated resolution summary (only injected into LLM when feedback == "helpful")
     resolution_summary: Optional[str] = None
+    # Analytics metadata: tokens, cost, model, duration (populated for new investigations)
+    metadata: dict = {}
 
 
 class InvestigationStore:
@@ -521,6 +523,8 @@ class InvestigationStore:
         limit: int = 50,
         source: Optional[str] = None,
         project_id: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
     ) -> list[Investigation]:
         """
         Return investigations sorted by started_at descending (newest first).
@@ -533,6 +537,10 @@ class InvestigationStore:
         filter_expr = Attr("pk").begins_with("INVESTIGATION#") & Attr("sk").eq("META")
         if source:
             filter_expr = filter_expr & Attr("source").eq(source)
+        if start_date:
+            filter_expr = filter_expr & Attr("started_at").gte(start_date)
+        if end_date:
+            filter_expr = filter_expr & Attr("started_at").lte(end_date)
 
         table = _get_table()
         items: list = []

@@ -131,6 +131,7 @@ export interface WebhooksResponse {
 
 export interface AppSettings {
   webhook_dev_mode: boolean;
+  system_prompt_additions: string;
 }
 
 export interface LlmInstructionsEntry {
@@ -240,6 +241,13 @@ export interface Investigation {
   error: string;
   feedback: string | null;
   resolution_summary: string | null;
+  metadata?: {
+    model?: string;
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    total_tokens?: number;
+    duration_ms?: number;
+  };
 }
 
 export interface SimilarInvestigation {
@@ -500,11 +508,19 @@ export const api = {
     });
   },
 
-  getInvestigations(params?: { limit?: number; source?: string; project_id?: string }): Promise<Investigation[]> {
+  getInvestigations(params?: {
+    limit?: number;
+    source?: string;
+    project_id?: string;
+    start_date?: string;
+    end_date?: string;
+  }): Promise<Investigation[]> {
     const qs = new URLSearchParams();
     if (params?.limit) qs.set('limit', String(params.limit));
     if (params?.source) qs.set('source', params.source);
     if (params?.project_id) qs.set('project_id', params.project_id);
+    if (params?.start_date) qs.set('start_date', params.start_date);
+    if (params?.end_date) qs.set('end_date', params.end_date);
     const query = qs.toString();
     return request(`/api/investigations${query ? `?${query}` : ''}`);
   },

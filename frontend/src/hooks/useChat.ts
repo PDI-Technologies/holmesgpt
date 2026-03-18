@@ -13,6 +13,7 @@ interface Message {
   content: string
   toolCalls?: ToolCall[]
   loading?: boolean
+  currentToolName?: string
 }
 
 // SSE event types emitted by the Holmes streaming endpoint
@@ -152,11 +153,18 @@ export function useChat(projectId: string | null = null) {
               )
             } else if (event === 'start_tool_calling') {
               // New tool call starting — tool_name comes here, description with result
+              const toolName = (d.tool_name as string) ?? ''
               currentTool = {
-                tool_name: (d.tool_name as string) ?? '',
+                tool_name: toolName,
                 description: '',
                 result: '',
               }
+              // Show which tool is currently running
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantId ? { ...m, currentToolName: toolName } : m,
+                ),
+              )
             } else if (event === 'tool_calling_result') {
               // Tool result arrived — fields: name, description, result (object with data)
               const toolName = (d.name as string) ?? currentTool?.tool_name ?? ''
@@ -165,11 +173,11 @@ export function useChat(projectId: string | null = null) {
               const resultStr = (resultObj?.data as string) ?? JSON.stringify(resultObj ?? '')
               pendingToolCalls.push({ tool_name: toolName, description, result: resultStr })
               currentTool = null
-              // Update tool calls in the message as they arrive
+              // Update tool calls in the message as they arrive, clear currentToolName
               const snapshot = [...pendingToolCalls]
               setMessages((prev) =>
                 prev.map((m) =>
-                  m.id === assistantId ? { ...m, toolCalls: snapshot } : m,
+                  m.id === assistantId ? { ...m, toolCalls: snapshot, currentToolName: undefined } : m,
                 ),
               )
             } else if (event === 'ai_answer_end') {

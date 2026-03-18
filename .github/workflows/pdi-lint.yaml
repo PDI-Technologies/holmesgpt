@@ -153,11 +153,14 @@ jobs:
         # Accepted risks (cannot upgrade without breaking other dependencies):
         #   CVE-2026-25990 (pillow 10.4.0): fix requires pillow>=12.1.1, but
         #     prometrix==0.2.9 pins pillow<11.0.0. Upstream issue — no PDI fix available.
+        #   CVE-2026-30922 (pyasn1 0.6.2): fix requires pyasn1>=0.6.3, but
+        #     transitive dependency via pyasn1-modules/google-auth. Awaiting upstream update.
         run: |
           pip-audit \
             -r /tmp/requirements.txt \
             --skip-editable \
             --ignore-vuln CVE-2026-25990 \
+            --ignore-vuln CVE-2026-30922 \
             --format columns \
             2>&1 | tee /tmp/pip_audit_report.txt
           # pip-audit exits 0 when all vulns are suppressed or none found.

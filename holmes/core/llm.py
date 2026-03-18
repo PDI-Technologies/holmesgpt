@@ -461,6 +461,7 @@ class DefaultLLM(LLM):
             allowed_openai_params=allowed_openai_params,
             stream=stream,
             timeout=LLM_REQUEST_TIMEOUT,
+            num_retries=3,
             **tools_args,
             **self.args,
             cache_control_injection_points=[
