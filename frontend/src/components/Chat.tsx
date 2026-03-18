@@ -165,15 +165,37 @@ export default function Chat({ projectId }: ChatProps) {
         {messages.map((msg) => (
           <div key={msg.id}>
             {msg.loading ? (
-              <div className="flex justify-start">
-                <div className="bg-white border border-gray-200 rounded-2xl rounded-bl-md px-4 py-3 shadow-sm">
-                  <div className="flex items-center gap-2 text-pdi-slate text-sm">
-                    <div className="flex gap-1">
-                      <span className="w-2 h-2 bg-pdi-sky rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                      <span className="w-2 h-2 bg-pdi-sky rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                      <span className="w-2 h-2 bg-pdi-sky rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+              <div className="space-y-2">
+                {/* Live tool call feed — show completed tools as they arrive */}
+                {msg.toolCalls && msg.toolCalls.length > 0 && (
+                  <div className="ml-0 max-w-[80%]">
+                    {msg.toolCalls.map((tc, i) => (
+                      <ToolCallCard
+                        key={i}
+                        toolName={tc.tool_name}
+                        description={tc.description}
+                        result={tc.result}
+                      />
+                    ))}
+                  </div>
+                )}
+                {/* Current activity indicator */}
+                <div className="flex justify-start">
+                  <div className="bg-white border border-gray-200 rounded-2xl rounded-bl-md px-4 py-3 shadow-sm">
+                    <div className="flex items-center gap-2 text-pdi-slate text-sm">
+                      <div className="flex gap-1">
+                        <span className="w-2 h-2 bg-pdi-sky rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                        <span className="w-2 h-2 bg-pdi-sky rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                        <span className="w-2 h-2 bg-pdi-sky rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                      </div>
+                      <span>
+                        {msg.currentToolName
+                          ? <span>Running <span className="font-mono text-pdi-sky text-xs">{msg.currentToolName}</span></span>
+                          : msg.toolCalls && msg.toolCalls.length > 0
+                            ? `Analyzing results (${msg.toolCalls.length} tools called)...`
+                            : 'Investigating...'}
+                      </span>
                     </div>
-                    Investigating...
                   </div>
                 </div>
               </div>
