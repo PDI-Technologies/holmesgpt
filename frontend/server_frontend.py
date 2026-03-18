@@ -176,10 +176,14 @@ def _restore_toolset_state_from_dynamodb(config) -> None:
 # Default is False — authentication is enforced. Persisted to DynamoDB.
 _webhook_dev_mode: bool = False
 
+# In-memory storage for admin-editable system prompt additions.
+# Appended to the core system prompt for all investigations (chat + webhooks).
+_system_prompt_additions: str = ""
+
 
 def _restore_app_settings_from_dynamodb() -> None:
-    """Load persisted app settings (e.g. webhook_dev_mode) from DynamoDB into memory."""
-    global _webhook_dev_mode
+    """Load persisted app settings from DynamoDB into memory."""
+    global _webhook_dev_mode, _system_prompt_additions
     table_name = os.environ.get("HOLMES_DYNAMODB_TABLE", "")
     if not table_name:
         return
@@ -188,9 +192,12 @@ def _restore_app_settings_from_dynamodb() -> None:
 
         store = get_app_settings_store()
         _webhook_dev_mode = bool(store.get("webhook_dev_mode", False))
+        _system_prompt_additions = str(store.get("system_prompt_additions", "") or "")
         logging.info(
-            "Restored app settings from DynamoDB: webhook_dev_mode=%s",
+            "Restored app settings from DynamoDB: webhook_dev_mode=%s, "
+            "system_prompt_additions=%d chars",
             _webhook_dev_mode,
+            len(_system_prompt_additions),
         )
     except Exception:
         logging.warning("Failed to restore app settings from DynamoDB", exc_info=True)
@@ -776,21 +783,44 @@ def mount_frontend(app: FastAPI, config=None) -> None:
     @app.get("/api/app-settings")
     async def get_app_settings():
         """Return global application settings."""
-        return JSONResponse({"webhook_dev_mode": _webhook_dev_mode})
+        return JSONResponse(
+            {
+                "webhook_dev_mode": _webhook_dev_mode,
+                "system_prompt_additions": _system_prompt_additions,
+            }
+        )
 
     @app.put("/api/app-settings")
     async def update_app_settings(request: Request):
         """Update global application settings and persist to DynamoDB."""
-        global _webhook_dev_mode
+        global _webhook_dev_mode, _system_prompt_additions
         body = await request.json()
-        if "webhook_dev_mode" in body:
-            from projects import get_app_settings_store  # noqa: PLC0415
 
+        from projects import get_app_settings_store  # noqa: PLC0415
+
+        store = get_app_settings_store()
+
+        if "webhook_dev_mode" in body:
             new_value = bool(body["webhook_dev_mode"])
-            get_app_settings_store().set("webhook_dev_mode", new_value)
+            store.set("webhook_dev_mode", new_value)
             _webhook_dev_mode = new_value
             logging.info("App settings updated: webhook_dev_mode=%s", new_value)
-        return JSONResponse({"webhook_dev_mode": _webhook_dev_mode})
+
+        if "system_prompt_additions" in body:
+            new_value = str(body["system_prompt_additions"] or "")
+            store.set("system_prompt_additions", new_value)
+            _system_prompt_additions = new_value
+            logging.info(
+                "App settings updated: system_prompt_additions=%d chars",
+                len(new_value),
+            )
+
+        return JSONResponse(
+            {
+                "webhook_dev_mode": _webhook_dev_mode,
+                "system_prompt_additions": _system_prompt_additions,
+            }
+        )
 
     # ── LLM Instructions helpers ──────────────────────────────────────────────
 
@@ -1228,6 +1258,8 @@ def mount_frontend(app: FastAPI, config=None) -> None:
         limit: int = 50,
         source: str = None,
         project_id: str = None,
+        start_date: str = None,
+        end_date: str = None,
     ):
         """List past investigations, newest first.
 
@@ -1242,6 +1274,8 @@ def mount_frontend(app: FastAPI, config=None) -> None:
                 limit=limit,
                 source=source or None,
                 project_id=project_id or None,
+                start_date=start_date or None,
+                end_date=end_date or None,
             )
             rows = []
             for inv in investigations:
@@ -1524,6 +1558,7 @@ def mount_frontend(app: FastAPI, config=None) -> None:
                     ai=ai,
                     config=config,
                     global_instructions=global_instructions,
+                    additional_system_prompt=_system_prompt_additions or None,
                 )
 
                 llm_call = ai.messages_call(messages=messages)
@@ -1881,7 +1916,7 @@ def mount_frontend(app: FastAPI, config=None) -> None:
 
                         _wb_enabled = (
                             get_webhook_settings_store()
-                            .get("pagerduty", project_id=project_id or None)
+                            .get("pagerduty", project_id=None)
                             .get("write_back_enabled", True)
                         )
                         pd_api_key = os.environ.get("PAGERDUTY_API_KEY", "")
@@ -2057,6 +2092,7 @@ def mount_frontend(app: FastAPI, config=None) -> None:
                     ai=ai,
                     config=config,
                     global_instructions=global_instructions,
+                    additional_system_prompt=_system_prompt_additions or None,
                 )
 
                 llm_call = ai.messages_call(messages=messages)
@@ -2140,7 +2176,7 @@ def mount_frontend(app: FastAPI, config=None) -> None:
 
                     _wb_enabled = (
                         get_webhook_settings_store()
-                        .get("ado", project_id=project_id or None)
+                        .get("ado", project_id=None)
                         .get("write_back_enabled", True)
                     )
                     ado_pat = os.environ.get("ADO_PAT", "")
@@ -2316,6 +2352,7 @@ def mount_frontend(app: FastAPI, config=None) -> None:
                     ai=ai,
                     config=config,
                     global_instructions=global_instructions,
+                    additional_system_prompt=_system_prompt_additions or None,
                 )
 
                 llm_call = ai.messages_call(messages=messages)
@@ -2399,7 +2436,7 @@ def mount_frontend(app: FastAPI, config=None) -> None:
 
                     _wb_enabled = (
                         get_webhook_settings_store()
-                        .get("salesforce", project_id=project_id or None)
+                        .get("salesforce", project_id=None)
                         .get("write_back_enabled", True)
                     )
                     sf_instance_url = os.environ.get(

@@ -265,6 +265,13 @@ export default function Settings() {
   const [webhookDevMode, setWebhookDevMode] = useState(false)
   const [devModeUpdating, setDevModeUpdating] = useState(false)
 
+  // System prompt additions state
+  const [systemPrompt, setSystemPrompt] = useState('')
+  const [systemPromptDraft, setSystemPromptDraft] = useState('')
+  const [systemPromptSaving, setSystemPromptSaving] = useState(false)
+  const [systemPromptSuccess, setSystemPromptSuccess] = useState(false)
+  const [systemPromptError, setSystemPromptError] = useState<string | null>(null)
+
   // LLM Instructions state
   const [llmIntegrations, setLlmIntegrations] = useState<LlmInstructionsEntry[]>([])
   const [llmLoading, setLlmLoading] = useState(true)
@@ -326,6 +333,11 @@ export default function Settings() {
       )
     })
 
+    api.getAppSettings().then((data) => {
+      setSystemPrompt(data.system_prompt_additions || '')
+      setSystemPromptDraft(data.system_prompt_additions || '')
+    }).catch(() => {})
+
     api.getAwsAccounts().then((data) => {
       setAwsAccounts(data.accounts)
       setIrsaRole(data.irsa_role)
@@ -360,6 +372,24 @@ export default function Settings() {
       ),
     )
   }
+
+  const handleSaveSystemPrompt = async () => {
+    setSystemPromptSaving(true)
+    setSystemPromptError(null)
+    setSystemPromptSuccess(false)
+    try {
+      const result = await api.updateAppSettings({ system_prompt_additions: systemPromptDraft })
+      setSystemPrompt(result.system_prompt_additions || '')
+      setSystemPromptSuccess(true)
+      setTimeout(() => setSystemPromptSuccess(false), 2500)
+    } catch (err) {
+      setSystemPromptError(err instanceof Error ? err.message : 'Failed to save')
+    } finally {
+      setSystemPromptSaving(false)
+    }
+  }
+
+  const systemPromptDirty = systemPromptDraft !== systemPrompt
 
   const selectedEntry = llmIntegrations.find((e) => e.name === selectedIntegration) ?? null
   const customCount = llmIntegrations.filter((e) => e.is_overridden).length
@@ -557,6 +587,81 @@ export default function Settings() {
                 </div>
               </div>
             )}
+          </div>
+
+          {/* System Prompt Additions */}
+          <div className="bg-white rounded-xl border border-pdi-cool-gray shadow-sm p-5">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-md bg-pdi-ocean/10 flex items-center justify-center">
+                  <svg className="w-3.5 h-3.5 text-pdi-ocean" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 01.865-.501 48.172 48.172 0 003.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" />
+                  </svg>
+                </div>
+                <h3 className="text-sm font-semibold text-pdi-granite">System Prompt</h3>
+                {systemPrompt && (
+                  <span className="text-xs bg-pdi-ocean/10 text-pdi-ocean px-2 py-0.5 rounded-full">
+                    Active
+                  </span>
+                )}
+              </div>
+              {systemPromptDirty && (
+                <span className="text-[10px] text-pdi-slate italic">Unsaved changes</span>
+              )}
+            </div>
+
+            <p className="text-xs text-pdi-slate mb-3">
+              Custom instructions appended to the core investigation prompt. Applied to all investigations (chat, webhooks, manual).
+            </p>
+
+            <textarea
+              value={systemPromptDraft}
+              onChange={(e) => setSystemPromptDraft(e.target.value)}
+              placeholder="Enter additional system prompt instructions... (e.g., 'Always check Datadog before concluding an investigation.', 'Prefer concise answers.', 'When investigating PagerDuty incidents, always check related Salesforce cases.')"
+              className="w-full min-h-[120px] px-3 py-2.5 border border-pdi-cool-gray rounded-lg text-xs font-mono text-pdi-granite resize-y focus:outline-none focus:ring-2 focus:ring-pdi-sky focus:border-transparent leading-relaxed"
+              spellCheck={false}
+            />
+
+            {systemPromptError && (
+              <div className="mt-2 text-xs text-pdi-orange bg-pdi-orange/5 border border-pdi-orange/20 rounded-lg px-3 py-2">
+                {systemPromptError}
+              </div>
+            )}
+
+            <div className="flex items-center justify-between mt-3">
+              <p className="text-[10px] text-pdi-slate/80 italic">
+                Persisted to DynamoDB. Survives pod restarts.
+              </p>
+              <div className="flex items-center gap-2">
+                {systemPromptSuccess && (
+                  <span className="text-xs text-pdi-grass font-medium flex items-center gap-1">
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                    </svg>
+                    Saved
+                  </span>
+                )}
+                <button
+                  onClick={handleSaveSystemPrompt}
+                  disabled={systemPromptSaving || !systemPromptDirty}
+                  className="px-3 py-1.5 text-xs text-white bg-pdi-sky rounded-lg font-medium hover:bg-pdi-sky/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
+                >
+                  {systemPromptSaving ? (
+                    <>
+                      <span className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      Save &amp; Apply
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
 
           {/* LLM Instructions */}

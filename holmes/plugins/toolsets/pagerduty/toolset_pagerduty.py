@@ -76,13 +76,19 @@ class PagerDutyToolset(Toolset):
 
     def _health_check(self) -> Tuple[bool, str]:
         try:
+            # Use /services with limit=1 as a lightweight health check.
+            # The /abilities endpoint was deprecated by PagerDuty and may
+            # return 410 Gone or 404 on newer accounts.
             resp = requests.get(
-                f"{PAGERDUTY_API_BASE}/abilities",
+                f"{PAGERDUTY_API_BASE}/services",
                 headers=self._headers(),
+                params={"limit": 1},
                 timeout=10,
             )
             if resp.status_code == 200:
                 return True, ""
+            if resp.status_code == 401:
+                return False, "PagerDuty API key is invalid or expired"
             return (
                 False,
                 f"PagerDuty API returned {resp.status_code}: {resp.text[:200]}",

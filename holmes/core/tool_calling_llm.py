@@ -694,7 +694,7 @@ class ToolCallingLLM:
     ) -> ToolCallResult:
         tool_params = {}
         try:
-            tool_params = json.loads(tool_arguments)
+            tool_params = json.loads(tool_arguments) or {}
         except Exception:
             logging.warning(
                 f"Failed to parse arguments for tool: {tool_name}. args: {tool_arguments}"

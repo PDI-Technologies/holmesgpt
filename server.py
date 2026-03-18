@@ -161,11 +161,13 @@ def _investigation_tracking_stream(
                     meta = message.data.get("metadata", {})
                     usage = meta.get("usage", {})
                     if usage:
-                        investigation_metadata.update({
-                            "prompt_tokens": usage.get("prompt_tokens", 0),
-                            "completion_tokens": usage.get("completion_tokens", 0),
-                            "total_tokens": usage.get("total_tokens", 0),
-                        })
+                        investigation_metadata.update(
+                            {
+                                "prompt_tokens": usage.get("prompt_tokens", 0),
+                                "completion_tokens": usage.get("completion_tokens", 0),
+                                "total_tokens": usage.get("total_tokens", 0),
+                            }
+                        )
                 except Exception:
                     pass
 
