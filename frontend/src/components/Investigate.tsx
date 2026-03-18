@@ -5,7 +5,7 @@ import ToolCallCard from './ToolCallCard'
 import { api, AwsAccount, type Project } from '../lib/api'
 import SimilarInvestigationsPanel from './SimilarInvestigations'
 
-const SOURCES = ['Manual', 'AlertManager', 'PagerDuty', 'Jira', 'OpsGenie', 'Salesforce', 'Azure DevOps', 'AWS CloudWatch']
+const SOURCES = ['Manual', 'AlertManager', 'PagerDuty', 'Jira', 'OpsGenie', 'Salesforce', 'Azure DevOps', 'AWS CloudWatch', 'Datadog', 'Grafana', 'Elasticsearch']
 
 export default function Investigate({ projectId, selectedProject }: { projectId?: string | null; selectedProject?: Project | null }) {
   const { investigations, loading, investigate, clearInvestigations } = useInvestigate(projectId)

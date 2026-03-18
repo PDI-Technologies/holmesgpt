@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { api, Investigation } from '../lib/api'
 import StatsCards from './StatsCards'
 
@@ -202,7 +202,7 @@ function InvestigationDetail({
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
-const SOURCE_OPTIONS = ['', 'ui', 'cli', 'pagerduty', 'ado', 'salesforce', 'webhook']
+// Source options derived dynamically from investigation data (see useMemo below)
 
 export default function InvestigationHistory() {
   const [investigations, setInvestigations] = useState<Investigation[]>([])
@@ -213,6 +213,12 @@ export default function InvestigationHistory() {
   const [loadingDetail, setLoadingDetail] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+
+  // Derive source filter options from actual investigation data
+  const sourceOptions = useMemo(() => {
+    const sources = [...new Set(investigations.map((i) => i.source).filter(Boolean))].sort()
+    return ['', ...sources]
+  }, [investigations])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -304,7 +310,7 @@ export default function InvestigationHistory() {
             onChange={(e) => setSourceFilter(e.target.value)}
             className="text-sm border border-pdi-cool-gray rounded-lg px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-pdi-sky"
           >
-            {SOURCE_OPTIONS.map((s) => (
+            {sourceOptions.map((s) => (
               <option key={s} value={s}>
                 {s || 'All sources'}
               </option>
