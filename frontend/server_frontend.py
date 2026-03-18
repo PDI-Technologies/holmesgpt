@@ -1200,7 +1200,6 @@ def mount_frontend(app: FastAPI, config=None) -> None:
         """Test AWS cross-account connection by attempting STS AssumeRole."""
         try:
             import boto3 as _boto3  # noqa: PLC0415
-
             from projects import get_instances_store  # noqa: PLC0415
 
             store = get_instances_store()
@@ -1475,7 +1474,9 @@ def mount_frontend(app: FastAPI, config=None) -> None:
 
         # ── Inject similar past investigations into LLM context ───────────
         try:
-            from projects import get_investigation_store as _get_inv_store  # noqa: PLC0415
+            from projects import (  # noqa: PLC0415
+                get_investigation_store as _get_inv_store,
+            )
 
             similar = _get_inv_store().search_similar(
                 query=f"{title} {description}",
