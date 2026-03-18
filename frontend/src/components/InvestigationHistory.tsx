@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { api, Investigation } from '../lib/api'
+import StatsCards from './StatsCards'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -287,6 +288,13 @@ export default function InvestigationHistory() {
           </div>
           <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-pdi-sky via-pdi-ocean to-pdi-indigo opacity-60" />
         </div>
+
+        {/* Stats cards */}
+        {investigations.length > 0 && (
+          <div className="mb-4">
+            <StatsCards investigations={investigations} />
+          </div>
+        )}
 
         {/* Filters */}
         <div className="flex items-center gap-3 mb-4">

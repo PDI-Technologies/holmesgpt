@@ -7,12 +7,13 @@ import Integrations from './components/Integrations'
 import Settings from './components/Settings'
 import Projects from './components/Projects'
 import Instances from './components/Instances'
+import Analytics from './components/Analytics'
 import Docs from './components/Docs'
 import LoginPage from './components/LoginPage'
 import { api } from './lib/api'
 import { useProject } from './hooks/useProject'
 
-export type Page = 'chat' | 'investigate' | 'history' | 'integrations' | 'instances' | 'settings' | 'projects' | 'docs'
+export type Page = 'chat' | 'investigate' | 'history' | 'analytics' | 'integrations' | 'instances' | 'settings' | 'projects' | 'docs'
 
 export default function App() {
   const [page, setPage] = useState<Page>('chat')
@@ -59,6 +60,7 @@ export default function App() {
         {page === 'chat' && <Chat projectId={selectedProjectId} />}
         {page === 'investigate' && <Investigate projectId={selectedProjectId} selectedProject={selectedProject} />}
         {page === 'history' && <InvestigationHistory />}
+        {page === 'analytics' && <Analytics />}
         {page === 'integrations' && <Integrations />}
         {page === 'settings' && <Settings />}
         {page === 'projects' && <Projects projects={projects} onReload={reloadProjects} />}
