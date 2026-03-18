@@ -72,6 +72,7 @@ def _save_investigation(
     tool_calls: list,
     status: str,
     error: str = "",
+    metadata: Optional[dict] = None,
 ) -> None:
     """Persist a completed investigation to DynamoDB (best-effort, never raises)."""
     table_name = os.environ.get("HOLMES_DYNAMODB_TABLE", "")
@@ -100,6 +101,7 @@ def _save_investigation(
             project_id=project_id or "",
             status=status,
             error=error,
+            metadata=metadata or {},
         )
         get_investigation_store().save(inv)
         logging.debug("Saved investigation %s to DynamoDB", investigation_id)
@@ -113,6 +115,7 @@ def _investigation_tracking_stream(
     started_at: str,
     question: str,
     project_id: str,
+    initial_metadata: Optional[dict] = None,
 ):
     """
     Wrap call_stream to intercept StreamMessage events and accumulate the tool
@@ -127,6 +130,7 @@ def _investigation_tracking_stream(
     final_answer: str = ""
     status: str = "completed"
     error_msg: str = ""
+    investigation_metadata: dict = dict(initial_metadata or {})
 
     try:
         for message in call_stream:
@@ -152,6 +156,19 @@ def _investigation_tracking_stream(
             elif message.event == StreamEvents.ANSWER_END:
                 final_answer = message.data.get("content", "")
 
+            elif message.event == StreamEvents.TOKEN_COUNT:
+                try:
+                    meta = message.data.get("metadata", {})
+                    usage = meta.get("usage", {})
+                    if usage:
+                        investigation_metadata.update({
+                            "prompt_tokens": usage.get("prompt_tokens", 0),
+                            "completion_tokens": usage.get("completion_tokens", 0),
+                            "total_tokens": usage.get("total_tokens", 0),
+                        })
+                except Exception:
+                    pass
+
             yield message
 
     except Exception as exc:
@@ -168,6 +185,7 @@ def _investigation_tracking_stream(
             tool_calls=tool_calls,
             status=status,
             error=error_msg,
+            metadata=investigation_metadata,
         )
 
 
@@ -628,13 +646,28 @@ def chat(chat_request: ChatRequest, http_request: Request):
                     "Failed to inject similar investigations into chat: %s", e
                 )
 
+        # Merge global system prompt additions (from Settings page) with
+        # any per-request additional_system_prompt.
+        combined_system_prompt = chat_request.additional_system_prompt or ""
+        try:
+            from server_frontend import _system_prompt_additions  # noqa: PLC0415
+
+            if _system_prompt_additions:
+                combined_system_prompt = (
+                    f"{_system_prompt_additions}\n\n{combined_system_prompt}"
+                    if combined_system_prompt
+                    else _system_prompt_additions
+                )
+        except ImportError:
+            pass  # server_frontend not mounted (e.g. CLI mode)
+
         messages = build_chat_messages(
             enriched_ask,
             chat_request.conversation_history,
             ai=ai,
             config=config,
             global_instructions=global_instructions,
-            additional_system_prompt=chat_request.additional_system_prompt,
+            additional_system_prompt=combined_system_prompt or None,
             runbooks=runbooks,
             images=chat_request.images,
             prompt_component_overrides=prompt_component_overrides,
@@ -656,6 +689,7 @@ def chat(chat_request: ChatRequest, http_request: Request):
                 started_at=started_at,
                 question=chat_request.ask,
                 project_id=chat_request.project_id or "",
+                initial_metadata={"model": ai.llm.model},
             )
             stream = stream_chat_formatter(
                 tracked_stream,
